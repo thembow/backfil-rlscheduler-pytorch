@@ -24,7 +24,6 @@ import string
 from subprocess import CalledProcessError
 from textwrap import dedent
 import time
-from tqdm import trange
 
 import gym
 from gym import spaces
