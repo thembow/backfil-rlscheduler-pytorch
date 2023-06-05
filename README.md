@@ -22,9 +22,10 @@ The relevant research paper has been published at SC20. If you reference or use 
 Use VirtuanEnv or Conda to build a Python3.9 environment and PyTorch at least 1.13.0
 Note that, we do not leverage GPUs, so no need to configure the GPU version of PyTorch.
 
-* OpenMPI 
+* OpenMPI and mpi4py
 ```bash
 sudo apt-get install openmpi-bin openmpi-doc libopenmpi-dev
+conda install mpi4py
 ```
 
 ### Clone Deep Batch Scheduler
