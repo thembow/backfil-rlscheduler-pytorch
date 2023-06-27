@@ -446,7 +446,7 @@ class HPCEnv(gym.Env):
                 self.job_queue.append(self.loads[self.start])
                 self.next_arriving_job_idx = self.start + 1
 
-                self.profile_head = ProfileNode(0, 0, 0, 0, False)
+                self.profile_head = None
                 #for conservative backfilling
 
                 if self.enable_preworkloads:
@@ -569,7 +569,7 @@ class HPCEnv(gym.Env):
         self.pivot_job = False
         self.scheduled_scores = []
 
-        self.profile_head = ProfileNode(0, 0, 0, 0, False)
+        self.profile_head = None
         #for conservative backfilling
 
 
@@ -1260,6 +1260,8 @@ class HPCEnv(gym.Env):
         """Used for Conservative Backfilling.
         Using proc profile, find earliest time when job can start.
         """
+        print(f"debug! finding anchor point for {job.job_id}")
+
         earliest_start_time = self.current_timestamp
         self.running_jobs.sort(key=lambda running_job: (running_job.scheduled_time + running_job.request_time))
         free_processors = self.cluster.free_node * self.cluster.num_procs_per_node
@@ -1268,18 +1270,21 @@ class HPCEnv(gym.Env):
             earliest_start_time = (running_job.scheduled_time + running_job.request_time)
             if free_processors >= job.request_number_of_processors:
                 break
+        print(f"debug! earliest starting time = {earliest_start_time}, free proc = {free_processors}")
         #sorts through running jobs to find when the first running job will release enough procs for it to run
         current = self.profile_head
         while current is not None:
             if current.start_time >= earliest_start_time and (free_processors - current.processors) >= job.request_number_of_processors:
-                #if we are after running job release time and if we have enough available processors 
+                #if we are after running job release time and if we have enough available processors
                 anchor = current.start_time
                 end_time = anchor + job.request_time
                 if self.check_availability(current, anchor, end_time, job.request_number_of_processors):
+                    print(f"debug! real anchor found at {current.id}")
                     return current.id, current.start_time
                     #job id of anchor point
             current = current.next
-        return None
+        print(f"debug! could not find anchor point, returning None and None :(")
+        return None, None
 
     def check_availability(self, current, start_range, end_range, requested_proc):
         """Used for Conservative Backfilling.
@@ -1308,36 +1313,47 @@ class HPCEnv(gym.Env):
         """Used for Conservative Backfilling.
         Update proc map of jobs when a new job is scheduled"""
         current = self.profile_head
-        new_node = ProfileNode(0, current.end_time, job.request_number_of_processors, anchor_id, False)
+        new_node = ProfileNode(self.current_timestamp, (self.current_timestamp + job.request_time), job.request_number_of_processors, job.job_id, False)
         if anchor_id is None:
-            # add the node to the end of the list
+            # if we cant find a place to anchor it add the node to the end of the list
             if self.profile_head is None:
+                print("debug! no valid head found, setting new one!")
                 self.profile_head = new_node
             else:
-                #attach node between anchor and its next node
                 current = self.profile_head
-                while current.next is not None:
+                while current is not None:
                     if current.next is None:
-                        new_node.start_time = current.end_time 
+                        new_node.start_time = current.end_time
+                        current.next = new_node
+                        break 
                         #this way the job will start when the last one ends
                     current = current.next
-                current.next = new_node
+                
         else:
             # Find the anchor node and attach the new node after it
             current = self.profile_head
             while current is not None:
                 if current.id == anchor_id:
                     new_node.start_time = current.start_time
+                    new_node.end_time = current.end_time
                     new_node.next = current.next
                     current.next = new_node
                     break
                 current = current.next
 
-    def schedule_job_conservative(self, job, scheduled_logs):
+    def schedule_job_conservative(self, job):
         """Used for Conservative Backfilling.
         Schedules a single job using conservative backfilling, but doesn't actually start it"""
+        print(f"debug! scheduling job id = {job.job_id}")
         anchor_id, _ = self.find_anchor_point(job)
+        print(f"debug! anchor_id = {anchor_id}")
         self.update_proc(job, anchor_id)
+        print(f"debug! proc map updated!")
+
+
+    def start_job_conservative(self, job, scheduled_logs):
+        """Used for Conservative Backfilling.
+        Starts a single job using conservative backfilling."""
         assert job.scheduled_time == -1  # this job should never be scheduled before.
         job.scheduled_time = self.current_timestamp
         job.allocated_machines = self.cluster.allocate(job.job_id, job.request_number_of_processors)
@@ -1350,9 +1366,12 @@ class HPCEnv(gym.Env):
             if current.id == job.job_id:
                 current.running = True
             current = current.next
+        print("debug! job scheduled succesfully!")
         return scheduled_logs
+        
 
     def moveforward_conservative(self):
+        print(f"debug! time is now moving forward!")
         """Used for Conservative Backfilling.
         Moves time forward based on if we need more jobs, or if we have to move to next scheduled jobs timestamp"""
         if self.next_arriving_job_idx >= self.last_job_in_batch:
@@ -1420,14 +1439,26 @@ class HPCEnv(gym.Env):
     def schedule_sequence_con(self, score_fn):
         """Using a score function, schedules an entire sequence using Conservative Backfilling"""
         scheduled_logs = {}
-        current = self.profile_head
+        scheduled_jobs = []
+        #jobs that have already been scheduled to prevent repeats
         while True:
+                print(f"debug! current timestamp = {self.current_timestamp}")
                 self.job_queue.sort(key=lambda j: score_fn(j))
-                job_for_scheduling = self.job_queue[0]
+                for j in self.job_queue:
+                    if j.job_id not in scheduled_jobs:
+                        #job hasn't been scheduled, so we can schedule it now
+                        scheduled_jobs.append(j.job_id)
+                        job_for_scheduling = j
+                        break
+                #this tracks jobs that have already been scheduled and stops us from reschedulign the same job over and over
                 self.schedule_job_conservative(job_for_scheduling)
+                current = self.profile_head
                 while current is not None:
+                    if not current.running:
+                        print(f"job start = {current.start_time}  timestamp = {self.current_timestamp}")
                     if current.start_time == self.current_timestamp:
-                        scheduled_logs = self.schedule_job_conservative(job_for_scheduling, scheduled_logs)
+                        print(f"starting job {current.id}")
+                        scheduled_logs = self.start_job_conservative(job_for_scheduling, scheduled_logs)
                     current = current.next
                 not_empty = self.moveforward_conservative()
                 if not not_empty:
