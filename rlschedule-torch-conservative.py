@@ -393,6 +393,9 @@ class HPCEnv(gym.Env):
 
         self.build_sjf = build_sjf
         self.sjf_scores = []
+
+        self.profile_head = None
+        #for conservative backfilling
         
 
 
@@ -454,6 +457,7 @@ class HPCEnv(gym.Env):
 
                 self.sjf_scores.append(sum(self.schedule_curr_sequence_reset(self.sjf_score).values()))
 
+        print(f"score for conservative sjf scheduling{np.mean(sum(self.schedule_sequence_con(self.sjf_score).values()))}")
             #print(self.sjf_scores)
 
     def seed(self, seed=None):
@@ -608,7 +612,6 @@ class HPCEnv(gym.Env):
 
         self.scheduled_scores.append(sum(self.schedule_curr_sequence_reset(self.sjf_score).values()))
         self.scheduled_scores.append(sum(self.schedule_curr_sequence_reset(self.f1_score).values()))
-        self.scheduled_scores.append(sum(self.schedule_sequence_con(self.sjf_score).values()))
         # self.scheduled_scores.append(sum(self.schedule_curr_sequence_reset(self.smallest_score).values()))
         # self.scheduled_scores.append(sum(self.schedule_curr_sequence_reset(self.fcfs_score).values()))
         #self.scheduled_scores.append(sum(self.schedule_curr_sequence_reset(self.f2_score).values()))
@@ -616,7 +619,7 @@ class HPCEnv(gym.Env):
         #self.scheduled_scores.append(sum(self.schedule_curr_sequence_reset(self.f4_score).values()))        
 
 
-        print(np.mean(self.scheduled_scores))
+        #print(np.mean(self.scheduled_scores))
         return self.build_observation(), self.build_critic_observation()
         
         '''
@@ -1423,23 +1426,30 @@ class HPCEnv(gym.Env):
                     self.cluster.release(next_resource_release_machines)
                     running_id = self.running_jobs[0].job_id
                     self.running_jobs.pop(0)  # remove the first running job.
+
                     #code below removes running job from proc map
                     current = self.profile_head
                     if current is None:
                         return
+                        #might need to fix at some point
                     else:
                         if current.id == running_id:
+                            print(f"debug! running id is the profile head, substituting!")
                             self.profile_head = self.profile_head.next
+                            return False
                         prev = None
 
                         # Traverse the linked list until the node with matching id is found
                         while current and current.id != running_id:
                             prev = current
                             current = current.next
+                            return False
 
                         # If the node is found, remove it by adjusting the pointers
                         if current:
+                            print(f"debug! running node found! prev={prev}, current={current}")
                             prev.next = current.next
+                            return False
                         else:
                             print("Node with running_id not found!")
         #section above handles moving time forward when queue is empty
