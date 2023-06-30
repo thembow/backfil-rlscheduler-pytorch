@@ -1283,8 +1283,8 @@ class HPCEnv(gym.Env):
         #sorts through running jobs to find when the first running job will release enough procs for it to run
         current = self.profile_head
         while current is not None:
-            if current.start_time >= earliest_start_time and (free_processors - current.processors) >= job.request_number_of_processors:
-                #if we are after running job release time and if we have enough available processors
+            if current.start_time >= earliest_start_time and (free_processors - current.processors) >= job.request_number_of_processors and not current.running:
+                #if we are after running job release time and if we have enough available processors and the job hasn't already started in the past
                 anchor = current.start_time
                 end_time = anchor + job.request_time
                 if self.check_availability(current, anchor, end_time, job.request_number_of_processors):
@@ -1299,6 +1299,9 @@ class HPCEnv(gym.Env):
         """Used for Conservative Backfilling.
         Determines if resources used by job remain available throughout its duration
         """
+        if start_range > self.current_timestamp:
+            return False
+            #prevents issue where we anchor to a job that has already started in the past
         self.running_jobs.sort(key=lambda running_job: (running_job.scheduled_time + running_job.request_time))
         free_processors = self.cluster.free_node * self.cluster.num_procs_per_node
         for running_job in self.running_jobs:
@@ -1329,6 +1332,7 @@ class HPCEnv(gym.Env):
                 print("debug! no valid head found, setting new one!")
                 self.profile_head = new_node
             else:
+                #add job at the end of the scheduling list
                 current = self.profile_head
                 while current is not None:
                     if current.next is None:
@@ -1338,9 +1342,10 @@ class HPCEnv(gym.Env):
                         break 
                         #this way the job will start when the last one ends
                     current = current.next
+                if new_node.start_time <= self.current_timestamp:
+                    print(f"debug! new job start time={new_node.start_time} is before {self.current_timestamp}, moving it forward")
+                    new_node.start_time = self.current_timestamp #if the last job in the current scheduling ends before the current timestamp, we can start this job at the current moment
                 print(f"debug! job {job.job_id} scheduled to start at={new_node.start_time}, based on job {current.id} end={current.end_time}")
-                assert new_node.start_time >= self.current_timestamp
-                
         else:
             # Find the anchor node and attach the new node after it
             current = self.profile_head
@@ -1352,7 +1357,7 @@ class HPCEnv(gym.Env):
                     current.next = new_node
                     break
                 current = current.next
-            print(f"debug! job {job.job_id} scheduled to start={new_node.start_time}")
+            print(f"debug! job {job.job_id} scheduled to start={new_node.start_time} based on job={current.id}")
 
 
     def schedule_job_conservative(self, job):
@@ -1408,7 +1413,7 @@ class HPCEnv(gym.Env):
             current = current.next
         return min_start, min_id
 
-    def moveforward_conservative(self):
+    def moveforward_conservative(self, score_fn):
         print(f"debug! time is now moving forward!")
         """Used for Conservative Backfilling.
         Moves time forward based on if we need more jobs, or if we have to move to next scheduled jobs timestamp"""
@@ -1417,6 +1422,7 @@ class HPCEnv(gym.Env):
                 print(f"debug! run out of new jobs!")
                 #assert not self.job_queue
                 if not self.job_queue:
+                    print(f"debug! no jobs in queue! ending simulation!")
                     return False
                 else:
                     print("debug! still have jobs in queue, continuing forward in time until they are all gone!")
@@ -1426,9 +1432,9 @@ class HPCEnv(gym.Env):
             print(f"debug! no jobs in queue, comparing next submit vs next release!")
             while not self.job_queue:
                 if not self.running_jobs:  # there are no running jobs
-                    print(f"debug! running jobs not found, next release={next_resource_release_time}!")
                     next_resource_release_time = sys.maxsize  # always add jobs if no resource can be released.
                     next_resource_release_machines = []
+                    print(f"debug! running jobs not found, next release={next_resource_release_time}!")
                 else:
                     self.running_jobs.sort(key=lambda running_job: (running_job.scheduled_time + running_job.run_time))
                     next_resource_release_time = (self.running_jobs[0].scheduled_time + self.running_jobs[0].run_time)
@@ -1476,6 +1482,7 @@ class HPCEnv(gym.Env):
                             return True
                         else:
                             print("Node with running_id not found!")
+                    self.compress_schedule(score_fn)
         #section above handles moving time forward when queue is empty
         else:
             print(f"debug! jobs found in queue, doing normal time progression")
@@ -1502,7 +1509,6 @@ class HPCEnv(gym.Env):
         #jobs that have already been scheduled to prevent repeats
         while True:
                 job_for_scheduling = None
-                print(f"debug! current timestamp = {self.current_timestamp}")
                 self.job_queue.sort(key=lambda j: score_fn(j))
                 for j in self.job_queue:
                     if j.job_id not in scheduled_jobs:
@@ -1523,8 +1529,8 @@ class HPCEnv(gym.Env):
                         print(f"debug! starting job {current.id}")
                         scheduled_logs = self.start_job_conservative(current.id, scheduled_logs)
                     current = current.next
-                not_empty = self.moveforward_conservative()
-                if not not_empty:
+                not_done = self.moveforward_conservative(score_fn)
+                if not not_done:
                     break
         self.post_process_score(scheduled_logs)
 
@@ -1543,6 +1549,58 @@ class HPCEnv(gym.Env):
             self.refill_preworkloads()
 
         return scheduled_logs
+    
+    def remove_not_running(self):
+         # Create a new profile head and a current pointer
+        new_profile_head = None
+        current = self.profile_head
+        
+        # Traverse the linked list
+        while current is not None:
+            if current.running:
+                # If current.running is True, keep the node in the new linked list
+                if new_profile_head is None:
+                    # If new_profile_head is not initialized, set it to the first node
+                    new_profile_head = current
+                else:
+                    # Otherwise, link the current node to the previous node
+                    new_profile_head.next = current
+                    new_profile_head = current
+            current = current.next
+        
+        # Set the next pointer of the last node in the new linked list to None
+        if new_profile_head is not None:
+            new_profile_head.next = None
+        
+        # Update the profile_head to the new linked list
+        self.profile_head = new_profile_head
+
+    def compress_schedule(self, score_fn):
+        """used for conservative backfilling.
+        called when job ends early, reschedules jobs in queue"""
+        print("debug! compressing jobs!")
+        scheduled_jobs = []
+        self.remove_not_running()
+        print("debug! removed all jobs not already running")
+        self.job_queue.sort(key=lambda j: score_fn(j))
+        job_for_scheduling = None
+        self.job_queue.sort(key=lambda j: score_fn(j))
+        for j in self.job_queue:
+            if j.job_id not in scheduled_jobs:
+                print(f"debug! {j.job_id} not in {scheduled_jobs}")
+                #job hasn't been scheduled, so we can schedule it now
+                scheduled_jobs.append(j.job_id)
+                job_for_scheduling = j
+                break
+        #this tracks jobs that have already been scheduled and stops us from reschedulign the same job over and over
+        if job_for_scheduling is not None:
+            #this way we don't reschedule jobs if we don't get a new one from the previous loop
+            self.schedule_job_conservative(job_for_scheduling)
+
+
+
+        
+
 def test_hpc_env():
     parser = argparse.ArgumentParser()
     parser.add_argument('--workload', type=str, default='./data/lublin_256.swf')  # RICC-2010-2
@@ -2627,6 +2685,6 @@ TODO:
         3. if we are at a jobs scheduled time, run it and remove from schedule list
         4. when job ends, remove it from proc map
     compression routine (AKA if a job ends early)
-        1. remove all non-running jobs from proc map, clear schedule
+        1. remove all non-running jobs from proc map
         2. re-add scheduled jobs updating their scheduling time using the new information
 """
