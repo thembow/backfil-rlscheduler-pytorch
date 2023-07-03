@@ -1266,11 +1266,8 @@ class HPCEnv(gym.Env):
             return [None, rl_total, True, None]
         
     def find_anchor_point(self, job):
-        """Used for Conservative Backfilling.
-        Using proc profile, find earliest time when job can start.
-        """
+        """using proc profile, find earliest time when job can start."""
         print(f"debug! finding anchor point for {job.job_id}")
-
         earliest_start_time = self.current_timestamp
         self.running_jobs.sort(key=lambda running_job: (running_job.scheduled_time + running_job.request_time))
         free_processors = self.cluster.free_node * self.cluster.num_procs_per_node
@@ -1283,10 +1280,11 @@ class HPCEnv(gym.Env):
         #sorts through running jobs to find when the first running job will release enough procs for it to run
         current = self.profile_head
         while current is not None:
-            if current.start_time >= earliest_start_time and (free_processors - current.processors) >= job.request_number_of_processors and not current.running:
+            if current.start_time >= earliest_start_time and (free_processors - current.processors) >= job.request_number_of_processors : #and not current.running
                 #if we are after running job release time and if we have enough available processors and the job hasn't already started in the past
                 anchor = current.start_time
                 end_time = anchor + job.request_time
+                print(f"debug! potential anchor found at {current.id}")
                 if self.check_availability(current, anchor, end_time, job.request_number_of_processors):
                     print(f"debug! real anchor found at {current.id}")
                     return current.id, current.start_time
@@ -1296,10 +1294,8 @@ class HPCEnv(gym.Env):
         return None, None
 
     def check_availability(self, current, start_range, end_range, requested_proc):
-        """Used for Conservative Backfilling.
-        Determines if resources used by job remain available throughout its duration
-        """
-        if start_range > self.current_timestamp:
+        """determines if resources used by job remain available throughout its duration"""
+        if start_range < self.current_timestamp:
             return False
             #prevents issue where we anchor to a job that has already started in the past
         self.running_jobs.sort(key=lambda running_job: (running_job.scheduled_time + running_job.request_time))
@@ -1363,8 +1359,7 @@ class HPCEnv(gym.Env):
 
 
     def schedule_job_conservative(self, job):
-        """Used for Conservative Backfilling.
-        Schedules a single job using conservative backfilling, but doesn't actually start it"""
+        """schedules a single job using conservative backfilling, but doesn't actually start it"""
         print(f"debug! in schedule_job_conservative scheduling, job id = {job.job_id}")
         anchor_id, _ = self.find_anchor_point(job)
         print(f"debug! in schedule_job_conservative scheduling, anchor_id = {anchor_id}")
@@ -1373,8 +1368,7 @@ class HPCEnv(gym.Env):
 
 
     def start_job_conservative(self, job_id, scheduled_logs):
-        """used for Conservative Backfilling.
-        Starts a single job using conservative backfilling."""
+        """starts a single job using conservative backfilling."""
         job = None
         for i in self.job_queue:
             if i.job_id == job_id:
@@ -2662,7 +2656,7 @@ if __name__ == '__main__':
     actual training code
     '''
     parser = argparse.ArgumentParser()
-    parser.add_argument('--workload', type=str, default='./data/lublin_256.swf')  # RICC-2010-2 lublin_256.swf SDSC-SP2-1998-4.2-cln.swf
+    parser.add_argument('--workload', type=str, default='./data/SDSC-SP2-1998-4.2-cln.swf')  # RICC-2010-2 lublin_256.swf SDSC-SP2-1998-4.2-cln.swf
     parser.add_argument('--model', type=str, default='./data/lublin_256.schd')
     parser.add_argument('--gamma', type=float, default=1)
     parser.add_argument('--seed', '-s', type=int, default=0)
