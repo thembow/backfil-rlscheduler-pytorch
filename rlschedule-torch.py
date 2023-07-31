@@ -1195,7 +1195,6 @@ class HPCEnv(gym.Env):
             # print("SKIP", end=" ")
             done, _ = self.skip_schedule()
         else:
-            job_for_scheduling = self.pairs[a][0]
             done = self.schedule(job_for_scheduling)
 
         if not done:

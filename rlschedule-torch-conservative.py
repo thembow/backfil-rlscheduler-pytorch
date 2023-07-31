@@ -348,7 +348,7 @@ MAX_RUN_TIME = 12 * 60 * 60 # assume maximal runtime is 12 hours
 JOB_FEATURES = 8
 DEBUG = False
 
-JOB_SEQUENCE_SIZE = 256
+JOB_SEQUENCE_SIZE = 1024
 SKIP_TIME = 360 # skip 60 seconds
 
 class HPCEnv(gym.Env):
@@ -525,6 +525,7 @@ class HPCEnv(gym.Env):
 
     def fcfs_score(self, job):
         submit_time = job.submit_time
+
         return submit_time
 
     def gen_preworkloads(self, size):
@@ -596,6 +597,7 @@ class HPCEnv(gym.Env):
                     done = True
         else:
             if self.batch_job_slice == 0:
+                self.start = 0
                 self.start = self.np_random.randint(job_sequence_size, (self.loads.size() - job_sequence_size - 1))
             else:
                 self.start = self.np_random.randint(job_sequence_size, (self.batch_job_slice - job_sequence_size - 1))
@@ -616,17 +618,18 @@ class HPCEnv(gym.Env):
         # self.scheduled_scores.append(sum(self.schedule_curr_sequence_reset(self.fcfs_score).values()))
         #self.scheduled_scores.append(sum(self.schedule_curr_sequence_reset(self.f2_score).values()))
         #self.scheduled_scores.append(sum(self.schedule_curr_sequence_reset(self.f3_score).values()))
-        #self.scheduled_scores.append(sum(self.schedule_curr_sequence_reset(self.f4_score).values()))    
+        #self.scheduled_scores.append(sum(self.schedule_curr_sequence_reset(self.f4_score).values()))
 
-        print(f"score for sjf conservative backfilling {np.mean(sum(self.schedule_sequence_con(self.sjf_score).values()))}")
-        print(f"score for sjf no backfilling {np.mean(sum(self.schedule_curr_sequence_reset(self.sjf_score).values()))}")
-        print(f"score for f1 no backfilling {np.mean(sum(self.schedule_curr_sequence_reset(self.f1_score).values()))}")
+        con_r = []
+        basic_r = []
+        con_r.append(sum(self.schedule_sequence_con(self.fcfs_score).values()))
+        basic_r.append(sum(self.schedule_curr_sequence_reset(self.fcfs_score).values()))
 
-        #print(self.sjf_scores)     
-
-
+        print(f"score for fcfs cons backfilling {np.mean(con_r)}")
+        print(f"score for fcfs easy backfilling {np.mean(basic_r)}")
+       
         #print(np.mean(self.scheduled_scores))
-        return self.build_observation(), self.build_critic_observation()
+        return self.build_observation(), self.build_critic_observation(), con_r, basic_r
         
         '''
         if (np.mean(self.scheduled_scores) > 5):
@@ -1273,26 +1276,30 @@ class HPCEnv(gym.Env):
         #key=lambda running_job: (running_job.scheduled_time + running_job.request_time)
         free_processors = self.cluster.free_node * self.cluster.num_procs_per_node
         #feel like there might be something here idk what yet
-        for running_job in self.running_jobs:
-            earliest_start_time = running_job.scheduled_time + running_job.request_time
-            #min(earliest_start_time, running_job.scheduled_time + running_job.request_time - job.request_time)
-            #earliest_start_time = min(earliest_start_time, running_job.scheduled_time + running_job.request_time - job.request_time)
-            #running_job.scheduled_time + running_job.request_time
-            #earliest_start_time = min(earliest_start_time, running_job.scheduled_time + running_job.request_time)
-            if free_processors >= job.request_number_of_processors:
-                break
-        #print(f"debug! earliest starting time = {earliest_start_time}, free proc = {free_processors}")
+        #print(f"current amount of free proc before running jobs = {free_processors}")
+        if free_processors < job.request_number_of_processors:
+            for running_job in self.running_jobs:
+                free_processors += len(running_job.allocated_machines) * self.cluster.num_procs_per_node
+                earliest_start_time = running_job.scheduled_time + running_job.request_time
+                #earliest_start_time = running_job.scheduled_time + running_job.request_time
+                # min(earliest_start_time, running_job.scheduled_time + running_job.request_time - job.request_time)
+                if free_processors >= job.request_number_of_processors:
+                    break
+        #print(f"current amount of free proc after running jobs = {free_processors}")
+        #print(f"debug! earliest starting time = {earliest_start_time}, free proc = {free_processors}, job requesting {job.request_number_of_processors} procs")
         #sorts through running jobs to find when the first running job will release enough procs for it to run
         current = self.profile_head
         while current is not None:
-            if current.start_time >= earliest_start_time and (free_processors - current.processors) >= job.request_number_of_processors: 
+            enough_proc = (free_processors - current.processors) >= job.request_number_of_processors if not current.running else True
+            #if a job is already running then we have already done the deduction at the current timestep
+            if current.start_time >= earliest_start_time and enough_proc:
                 #if we are after running job release time and if we have enough available processors and the job hasn't already started in the past
                 anchor = current.start_time
                 end_time = anchor + job.request_time
                 #print(f"debug! potential anchor found at {current.id}")
                 #anchor = potential time where we could start job at the same time, end time= when the job we are trying to schedule will end
                 if self.check_availability(current, anchor, end_time, job.request_number_of_processors):
-                    #print(f"debug! real anchor found at {current.id}")
+                    print(f"debug! real anchor found at {current.id}")
                     return current.id, current.start_time
                     #job id of anchor point
             current = current.next
@@ -1305,23 +1312,35 @@ class HPCEnv(gym.Env):
         if start_range < self.current_timestamp:
             return False
             #prevents issue where we anchor to a job that has already started in the past
+        #print(f"amount of nodes request by job = {requested_proc}")
         self.running_jobs.sort(key=lambda running_job: (running_job.scheduled_time + running_job.request_time))
         #key=lambda running_job: (running_job.scheduled_time + running_job.request_time)
         free_processors = self.cluster.free_node * self.cluster.num_procs_per_node
-        for running_job in self.running_jobs:
-            if (running_job.scheduled_time <= start_range < (running_job.scheduled_time + running_job.request_time)) or (start_range <= running_job.scheduled_time < end_range):
-                #if running job is in range of the job we are trying to schedule
-                free_processors -= len(running_job.allocated_machines) * self.cluster.num_procs_per_node
-                if free_processors < requested_proc:
-                    #print("debug! not enough free processors in range due to running jobs!")
-                    return False
+        #print(f"current amount of free proc before running jobs = {free_processors}")
+        if start_range != self.current_timestamp:
+        #if we are starting a jump at the current time, we dont need to calculate for running jobs because the free procs have already been subtracted
+            for running_job in self.running_jobs:
+                if (running_job.scheduled_time <= start_range < (running_job.scheduled_time + running_job.request_time)) or (start_range <= running_job.scheduled_time < end_range):
+                    #if running job is in range of the job we are trying to schedule
+                    #print(f"running job found in range = {running_job.job_id}")
+                    running_proc = len(running_job.allocated_machines) * self.cluster.num_procs_per_node
+                    free_processors -= running_proc
+                    #print(f"new free proc after = {free_processors} ")
+                    if free_processors < requested_proc:
+                        #print("debug! not enough free processors in range due to running jobs!")
+                        return False
         #we have to check the running jobs and subtract the available node count accordingly bc some jobs might be running in the time range
+        #TODO: possibly check if it is None at the beginning to see if there are free processors
         while current is not None and current.start_time < end_range:
             #check proc map if we have enough processors available
-            if (current.start_time <= start_range < current.end_time) or (start_range <= current.start_time < end_range) and not current.running:
+            #if current.start_time != self.current_timestamp:
+                #if the job 
+            if ((current.start_time <= start_range < current.end_time) or (start_range <= current.start_time < end_range)) and not current.running:
+                #print(f"scheduled job found in range = {current.id}")
                 free_processors -= current.processors
+                #print(f"new proc count after subtraction = {free_processors}")
                 if free_processors < requested_proc:
-                    #print("debug! not enough free processors in range due to scheduled jobs!")
+                    #print(f"debug! not enough free processors in range due to scheduled job id={current.id}!")
                     return False
             current = current.next
         return True
@@ -1350,7 +1369,8 @@ class HPCEnv(gym.Env):
                     current = current.next
                 if new_node.start_time <= self.current_timestamp:
                     #print(f"debug! new job start time={new_node.start_time} is before {self.current_timestamp}, moving it forward")
-                    new_node.start_time = self.current_timestamp #if the last job in the current scheduling ends before the current timestamp, we can start this job at the current moment
+                    new_node.start_time = self.current_timestamp
+                    #if the last job in the current scheduling ends before the current timestamp, we can start this job at the current moment
                 #print(f"debug! job {job.job_id} scheduled to start at={new_node.start_time}, based on job {current.id} end={current.end_time}")
         else:
             # Find the anchor node and attach the new node after it
@@ -1391,14 +1411,16 @@ class HPCEnv(gym.Env):
         #if we cant find the job for whatever reason, then skip it
         assert job.scheduled_time == -1  # this job should never be scheduled before.
         job.scheduled_time = self.current_timestamp
+        #print(f"job {job.job_id} started at {self.current_timestamp}, ends at {self.current_timestamp + job.run_time}")
         job.allocated_machines = self.cluster.allocate(job.job_id, job.request_number_of_processors)
         self.running_jobs.append(job)
         score = self.job_score(job)  # calculated reward
         scheduled_logs[job] = score
         self.job_queue.remove(job)
-        current =  self.profile_head
+        current = self.profile_head
         while current is not None:
             if current.id == job.job_id:
+                #print(f"set proc {current.id} to Running!")
                 current.running = True
             current = current.next
         #sets jobs status to running in proc map
@@ -1421,7 +1443,7 @@ class HPCEnv(gym.Env):
         return min_start, min_id
 
     def moveforward_conservative(self, score_fn):
-        print(f"debug! time is now moving forward!")
+        #print(f"debug! time is now moving forward!")
         """Used for Conservative Backfilling.
         Moves time forward based on if we need more jobs, or if we have to move to next scheduled jobs timestamp"""
         out_of_jobs = False
@@ -1471,7 +1493,8 @@ class HPCEnv(gym.Env):
             next_time = min(proc_map_next_start, next_resource_release_time, self.loads[self.next_arriving_job_idx].submit_time) if not out_of_jobs else min(proc_map_next_start, next_resource_release_time)
             #print(f"debug! current next_time = {next_time}")
             #find the smallest value to determine the next course of action
-            if next_time ==  self.loads[self.next_arriving_job_idx].submit_time and not out_of_jobs:
+            #print(f"next arriving index = {self.next_arriving_job_idx}, out of jobs = {out_of_jobs}")
+            if not out_of_jobs and next_time ==  self.loads[self.next_arriving_job_idx].submit_time:
                 #move time forward and add job to queue
                 self.current_timestamp = max(self.current_timestamp, self.loads[self.next_arriving_job_idx].submit_time)
                 #print(f"debug! moving time forward to add jobs to queue, new timestamp = {self.current_timestamp}")
@@ -1516,7 +1539,7 @@ class HPCEnv(gym.Env):
             #might need to fix at some point
         else:
             if current.id == running_id:
-                print(f"debug! running id is the profile head, substituting!")
+                #print(f"debug! running id is the profile head, substituting!")
                 self.profile_head = self.profile_head.next
                 return True
             prev = None
@@ -1529,7 +1552,7 @@ class HPCEnv(gym.Env):
 
             # If the node is found, remove it by adjusting the pointers
             if current:
-                print(f"debug! running node found! prev={prev}, current={current}")
+                #print(f"debug! running node found! prev={prev}, current={current}")
                 prev.next = current.next
                 return True
             else:
@@ -1541,25 +1564,27 @@ class HPCEnv(gym.Env):
         scheduled_jobs = []
         #jobs that have already been scheduled to prevent repeats
         while True:
+                #print(f"debug! current timestamp = {self.current_timestamp}")
                 job_for_scheduling = None
                 self.job_queue.sort(key=lambda j: score_fn(j))
                 for j in self.job_queue:
+                    #print(f"current amount of jobs in queue = {len(self.job_queue)}")
                     if j.job_id not in scheduled_jobs:
-                        print(f"debug! {j.job_id} not in {scheduled_jobs}")
+                        #print(f"debug! {j.job_id} not in {scheduled_jobs}")
                         #job hasn't been scheduled, so we can schedule it now
                         scheduled_jobs.append(j.job_id)
+                        #TODO: error read me later!
                         job_for_scheduling = j
-                        break
+                        if job_for_scheduling is not None:
+                            #this way we don't reschedule jobs if we don't get a new one from the previous loop
+                            self.schedule_job_conservative(job_for_scheduling)
                 #this tracks jobs that have already been scheduled and stops us from reschedulign the same job over and over
-                if job_for_scheduling is not None:
-                    #this way we don't reschedule jobs if we don't get a new one from the previous loop
-                    self.schedule_job_conservative(job_for_scheduling)
                 current = self.profile_head
                 while current is not None:
                     #if not current.running:
                         #print(f"debug! job id={current.id}, start={current.start_time}, end={current.end_time}, timestamp={self.current_timestamp}")
                     if current.start_time == self.current_timestamp and not current.running:
-                        print(f"debug! starting job {current.id}")
+                        #print(f"debug! starting job {current.id}")
                         scheduled_logs = self.start_job_conservative(current.id, scheduled_logs)
                     current = current.next
                 not_done = self.moveforward_conservative(score_fn)
@@ -1610,24 +1635,24 @@ class HPCEnv(gym.Env):
     def compress_schedule(self, score_fn):
         """used for conservative backfilling.
         called when job ends early, reschedules jobs in queue"""
-        print("debug! compressing jobs!")
+        #print("debug! compressing jobs!")
         scheduled_jobs = []
         self.remove_not_running()
-        print("debug! removed all jobs not already running")
+        #print("debug! removed all jobs not already running")
         self.job_queue.sort(key=lambda j: score_fn(j))
         for j in self.job_queue:
             job_for_scheduling = None
             if j.job_id not in scheduled_jobs:
-                print(f"debug! {j.job_id} not in {scheduled_jobs}")
+                #print(f"debug! {j.job_id} not in {scheduled_jobs}")
                 #job hasn't been scheduled, so we can schedule it now
                 scheduled_jobs.append(j.job_id)
                 job_for_scheduling = j
             #this tracks jobs that have already been scheduled and stops us from reschedulign the same job over and over
             if job_for_scheduling is not None:
                 #this way we don't reschedule jobs if we don't get a new one from the previous loop
-                print(f"debug! compress scheduling job {job_for_scheduling.job_id}")
+                #print(f"debug! compress scheduling job {job_for_scheduling.job_id}")
                 self.schedule_job_conservative(job_for_scheduling)
-        print("debug! finished compressing jobs!")
+        #print("debug! finished compressing jobs!")
 """
     CONSERVATIVE BACKFILLING
     terms
@@ -1637,7 +1662,7 @@ class HPCEnv(gym.Env):
     main scheduling routine
         1. find anchor point for job
             a. scan for first position in proc map with enough available processors, if found the node becomes the anchor point
-            b. scan from anchor point to end to check if enough processors remain available
+            b. scan from anchor point to end to check if enough processors remain available throughout the jobs duration
             c. return anchor point and if duration is good
         2. update proc map 
             a. if anchor point and duration are good, attach to anchor in proc map
@@ -2586,11 +2611,13 @@ def ppo(workload_file, model_path, ac_kwargs=dict(), seed=0,
                      DeltaLossV=(loss_v.item() - v_l_old))
         
 
-    [o, co], r, d, ep_ret, ep_len, show_ret, sjf, f1 = env.reset(), 0, False, 0, 0, 0, 0, 0
+    [o, co, con_r, basic_r], r, d, ep_ret, ep_len, show_ret, sjf, f1 = env.reset(), 0, False, 0, 0, 0, 0, 0
 
     # Main loop: collect experience in env and update/log each epoch
     start_time = MPI.Wtime()
     num_total = 0
+    con_list = []
+    basic_list = []
     for epoch in range(epochs):
         t = 0
         while True:
@@ -2627,7 +2654,9 @@ def ppo(workload_file, model_path, ac_kwargs=dict(), seed=0,
                 t += 1
                 buf.finish_path(r)
                 logger.store(EpRet=ep_ret, EpLen=ep_len, ShowRet=show_ret, SJF=sjf, F1=f1)
-                [o, co], r, d, ep_ret, ep_len, show_ret, sjf, f1 = env.reset(), 0, False, 0, 0, 0, 0, 0
+                [o, co, con_r, basic_r], r, d, ep_ret, ep_len, show_ret, sjf, f1 = env.reset(), 0, False, 0, 0, 0, 0, 0
+                con_list.append(con_r)
+                basic_list.append(basic_r)
                 if t >= local_traj_per_epoch:
                     # print ("state:", state, "\nlast action in a traj: action_probs:\n", action_probs, "\naction:", action)
                     break
@@ -2639,7 +2668,8 @@ def ppo(workload_file, model_path, ac_kwargs=dict(), seed=0,
         # start_time = time.time()
         update()
         # print("Train time:", time.time()-start_time)
-
+        # print(f"score for fcfs cons backfilling {np.mean(con_r)}")
+        # print(f"score for fcfs easy backfilling {np.mean(basic_r)}")
         # Log info about epoch
         logger.log_tabular('Epoch', epoch)
         logger.log_tabular('EpRet', with_min_and_max=True)
@@ -2659,6 +2689,7 @@ def ppo(workload_file, model_path, ac_kwargs=dict(), seed=0,
         logger.log_tabular('F1', average_only=True)
         logger.log_tabular('Time', MPI.Wtime()-start_time)
         logger.dump_tabular()
+
 
 
 if __name__ == '__main__':
@@ -2686,18 +2717,24 @@ if __name__ == '__main__':
     parser.add_argument('--score_type', type=int, default=0)
     parser.add_argument('--batch_job_slice', type=int, default=0)
     args = parser.parse_args()
+
     
     mpi_fork(args.cpu)  # run parallel code with mpi
 
     # build absolute path for using in hpc_env.
     current_dir = os.getcwd()
     workload_file = os.path.join(current_dir, args.workload)
+    # testingFunction(workload_file, args.shuffle, args.backfil, args.skip, args.score_type, args.batch_job_slice, args.train_model, False)
     log_data_dir = os.path.join(current_dir, './logs/')
     logger_kwargs = setup_logger_kwargs(args.exp_name, seed=args.seed, data_dir=log_data_dir)
+
 
     ppo(workload_file, args.model, gamma=args.gamma, seed=args.seed, traj_per_epoch=args.trajs, epochs=args.epochs,
         logger_kwargs=logger_kwargs, pre_trained=0, attn=args.attn,shuffle=args.shuffle, backfil=args.backfil,
             skip=args.skip, score_type=args.score_type, batch_job_slice=args.batch_job_slice)
+    
+
+
 
 
 

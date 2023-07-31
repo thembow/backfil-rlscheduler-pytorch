@@ -651,6 +651,7 @@ class HPCEnv(gym.Env):
         self.current_timestamp = self.loads[self.start].submit_time
         self.job_queue.append(self.loads[self.start])
         self.next_arriving_job_idx = self.start + 1
+        #added to make compare.py work, was getting errors about empty scheduled scores so maybe this will fix?
     
     def skip_for_resources_greedy(self, job, scheduled_logs):
         #note that this function is only called when current job can not be scheduled.
@@ -812,10 +813,12 @@ class HPCEnv(gym.Env):
             if not self.cluster.can_allocated(job_for_scheduling):
                 #print(f'debug! cannot allocate {job_for_scheduling}, backfilling it now!')
                 if self.backfil:
+                    #print("debug! backfill opportunity found!")
                     self.rjob = job_for_scheduling
                     self.backfilling = True
                     return False
                 else:
+                    #print("debug! skipping backfill opportunity!")
                     self.skip_for_resources_greedy(job_for_scheduling, scheduled_logs)
             
             assert job_for_scheduling.scheduled_time == -1  # this job should never be scheduled before.
@@ -830,25 +833,6 @@ class HPCEnv(gym.Env):
             not_empty = self.moveforward_for_job()
             if not not_empty:
                 return True
-        self.post_process_score(scheduled_logs)
-        # if f:
-        #     print((time.time()-start_time)/num_total, num_total)
-        # reset again
-        self.cluster.reset()
-        self.loads.reset()
-        self.job_queue = []
-        self.running_jobs = []
-        self.visible_jobs = []
-        self.pairs = []
-        self.current_timestamp = self.loads[self.start].submit_time
-        self.job_queue.append(self.loads[self.start])
-        self.last_job_in_batch = self.start + self.num_job_in_batch
-        self.next_arriving_job_idx = self.start + 1
-
-        if self.enable_preworkloads:
-            self.refill_preworkloads()
-
-        return scheduled_logs
 
     def build_critic_observation(self):
         vector = np.zeros(JOB_SEQUENCE_SIZE * 3,dtype=float)
@@ -1331,21 +1315,42 @@ class HPCEnv(gym.Env):
     
     def step_for_test(self, a):
         job_for_scheduling = self.pairs[a][0]
-
+        if self.backfilling:
+            #print("debug! backfilling job!")
+            done = self.moveforward_for_resources_backfill_modified(
+                self.rjob, job_for_scheduling)
+            # generate done signal
+            if not done:
+                #print(f'debug! backfilling not done for rjob = {self.rjob}, asking for new job to backfill')
+                obs = self.build_observation()
+                return [obs, 0, False, 0]
+            # return to ask for another job to backfill
+            if done:
+                #print("debug! done backfilling!")
+                #print(f'debug! backfilling is done! return to heur scheduling')
+                self.backfilling = False
+                self.rjob = 0
+                # exit backfilling loop
+        """
+        basically two done signals being generated (1 for the backfilling status, 1 for the entire trajectory)
+        but they shouldnt collide bc no matter what either skip_schedule or schedule runs after the backfilling and generates the traj done signal
+        """
         if not job_for_scheduling:
-            # print("SKIP", end=" ")
+            #print("debug! skipping current job!")
             done, _ = self.skip_schedule()
         else:
-            job_for_scheduling = self.pairs[a][0]
-            done = self.schedule(job_for_scheduling)
+            #print("debug! scheduling via heuristic!")
+            done = self.schedule_curr_sequence(self.sjf_score)
+            #schedule using modified heuristic scheduling, maybe include argument in the program to change this for testing purposes???            
 
         if not done:
             obs = self.build_observation()
-            return [obs, 0, False, None]
+            return [obs, 0, False, 0]
         else:
             self.post_process_score(self.scheduled_rl)
             rl_total = sum(self.scheduled_rl.values())
             return [None, rl_total, True, None]
+      
 
 def test_hpc_env():
     parser = argparse.ArgumentParser()
@@ -2160,8 +2165,8 @@ class RLActorCritic(nn.Module):
             v = self.v(obs, mask)
         return a.numpy(), v.numpy(), logp_a.numpy()
 
-    def act(self, obs):
-        return self.step(obs)[0]
+    def act(self, obs, mask):
+        return self.step(obs, mask)[0]
 
 
 """
