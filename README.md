@@ -65,10 +65,8 @@ It will plot the training curve.
 After the RLBackfiller converges, you can test the result and compare it with different policies such as FCFS, SJF, WFP3, UNICEP, and F1.
 
 ```bash
-python compare-pick-jobs.py --rlmodel "./logs/your-exp-name/your-exp-name_s0/" --workload "./data/lublin_256.swf" --len 2048 --iter 10
+python compare-make-table.py --rlmodel "./logs/your-exp-name/your-exp-name_s0/" --workload "./data/lublin_256.swf" --len 2048 --iter 10
 ```
 There are many parameters you can use:
 * `--seed`, the seed for random sampling
 * `--iter`, how many iterations for the testing
-* `--backfil`, enable/disable backfilling during the test
-* `--score_type`, specify the scheduling metrics. [0]：bounded job slowdown；[1]: job waiting time; [2]: job response time; [3] system resource utilization.
