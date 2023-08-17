@@ -1,20 +1,7 @@
-# RLScheduler Using Pytorch
-This repo includes the deep batch scheduler source code and necessary datasets to run the experiments/tests. 
+# RLBackfilling Using Pytorch
+This repo includes the deep batch scheduler and bfTorch source code and necessary datasets to run the experiments/tests. 
 
 The code has been tested on Ubuntu 18.04 with PyTorch 1.13 and Gym 0.21. 
-## Citing RLScheduler
-The relevant research paper has been published at SC20. If you reference or use RLScheduler in your research, please cite:
-
-```
-@inproceedings{zhang2020rlscheduler,
-  title={RLScheduler: an automated HPC batch job scheduler using reinforcement learning},
-  author={Zhang, Di and Dai, Dong and He, Youbiao and Bao, Forrest Sheng and Xie, Bing},
-  booktitle={SC20: International Conference for High Performance Computing, Networking, Storage and Analysis},
-  pages={1--15},
-  year={2020},
-  organization={IEEE}
-}
-```
 
 ## Installation
 ### Required Software
@@ -45,6 +32,9 @@ pip install -r requirements.txt
 data/: Contains a series of workload and real-world traces.
 plot.py: Plot the trained results.
 rlschedule-torch.py: The main rlscheduler file.
+compare-make-table.py: Generates raw avgbsld scores
+compare.py: Generates box and whisker plot comparisons
+bfTorch.py: Used to train RLBackfilling models
 ```
 
 To change the hyper-parameters, such as `MAX_OBSV_SIZE` or the trajectory length during training, you can change them in rlschedule-torch.py.
@@ -72,7 +62,7 @@ It will plot the training curve.
 
 ### Test and Compare
 
-After RLScheduler converges, you can test the result and compare it with different policies such as FCFS, SJF, WFP3, UNICEP, and F1.
+After the RLBackfiller converges, you can test the result and compare it with different policies such as FCFS, SJF, WFP3, UNICEP, and F1.
 
 ```bash
 python compare-pick-jobs.py --rlmodel "./logs/your-exp-name/your-exp-name_s0/" --workload "./data/lublin_256.swf" --len 2048 --iter 10
