@@ -31,10 +31,11 @@ pip install -r requirements.txt
 ```
 data/: Contains a series of workload and real-world traces.
 plot.py: Plot the trained results.
-rlschedule-torch.py: The main rlscheduler file.
+bfTorch.py: Used to train and run RLBackfilling models
+rlschedule-torch.py: Used to run tests for actual/noisy runtime performance
 compare-make-table.py: Generates raw avgbsld scores
 compare.py: Generates box and whisker plot comparisons
-bfTorch.py: Used to train RLBackfilling models
+
 rlschedule-torch-conservative.py: contains Conservative Backfilling implementation
 ```
 
