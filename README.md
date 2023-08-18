@@ -17,12 +17,12 @@ conda install mpi4py
 
 ### Clone Deep Batch Scheduler
 ```bash
-git clone https://github.com/daidong/rlscheduler-pytorch.git
+git clone https://github.com/thembow/backfil-rlscheduler-pytorch.git
 ```
 
 ### Install Dependencies
 ```shell script
-cd rlscheduler-pytorch
+cd backfil-rlscheduler-pytorch
 pip install -r requirements.txt
 ```
 
@@ -35,14 +35,15 @@ rlschedule-torch.py: The main rlscheduler file.
 compare-make-table.py: Generates raw avgbsld scores
 compare.py: Generates box and whisker plot comparisons
 bfTorch.py: Used to train RLBackfilling models
+rlschedule-torch-conservative.py: contains Conservative Backfilling implementation
 ```
 
-To change the hyper-parameters, such as `MAX_OBSV_SIZE` or the trajectory length during training, you can change them in rlschedule-torch.py.
+To change the hyper-parameters, such as `MAX_OBSV_SIZE` or the trajectory length during training, you can change them in bfTorch.py.
 
 ### Training
 To train a RL model based on a job trace, run this command:
 ```bash
-python rlschedule-torch.py --workload "./data/lublin_256.swf" --exp_name your-exp-name --trajs 500 --seed 0 --cpu 4
+python bfTorch.py --workload "./data/lublin_256.swf" --exp_name your-exp-name --trajs 500 --seed 0 --cpu 4
 ```
 
 There are many other parameters in the source file.
