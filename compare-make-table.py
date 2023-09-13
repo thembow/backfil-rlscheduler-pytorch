@@ -88,7 +88,7 @@ def run_policy(env, get_action, nums, iters, score_type):
 
         sjf_r.append(sum(env.schedule_curr_sequence_reset(env.sjf_score).values()))
         # small_r.append(sum(env.schedule_curr_sequence_reset(env.smallest_score).values()))
-        fcfs_r.append(sum(env.schedule_curr_sequence_reset(env.fcfs_score).values()))
+        fcfs_r.append(sum(env.schedule_sequence_con(env.fcfs_score).values()))
 
         o = env.build_observation()
         rl = 0
@@ -135,6 +135,7 @@ def run_policy(env, get_action, nums, iters, score_type):
         print ("")
 
     # plot
+
     all_data = []
     all_data.append(fcfs_r)
     all_data.append(wfp_r)
@@ -173,6 +174,7 @@ if __name__ == '__main__':
     parser.add_argument('--skip', type=int, default=0)
     parser.add_argument('--score_type', type=int, default=0)
     parser.add_argument('--batch_job_slice', type=int, default=10000)
+    parser.add_argument('--heuristic', type=str, default='fcfs')
 
     args = parser.parse_args()
 
@@ -184,10 +186,10 @@ if __name__ == '__main__':
 
     # initialize the environment from scratch
     env = HPCEnv(shuffle=args.shuffle, backfil=args.backfil, skip=args.skip, job_score_type=args.score_type,
-                 batch_job_slice=args.batch_job_slice, build_sjf=False)
+                 batch_job_slice=args.batch_job_slice, build_sjf=False, heuristic=args.heuristic)
     env.my_init(workload_file=workload_file)
     env.seed(args.seed)
 
     start = time.time()
-    run_policy(env, get_action args.len, args.iter, args.score_type)
+    run_policy(env, get_action, args.len, args.iter, args.score_type)
     print("elapse: {}".format(time.time() - start))

@@ -64,18 +64,18 @@ def load_pytorch_policy(fpath, itr, deterministic=False):
 
     return get_action
 
-def action_from_obs(o):
-    lst = []
-    for i in range(0, MAX_QUEUE_SIZE * JOB_FEATURES, JOB_FEATURES):
-        if o[i] == 0 and o[i + 1] == 1 and o[i + 2] == 1 and o[i + 3] == 0:
-            pass
-        elif o[i] == 1 and o[i + 1] == 1 and o[i + 2] == 1 and o[i + 3] == 1:
-            pass
-        else:
-            lst.append((o[i+1],math.floor(i/JOB_FEATURES)))
-    min_time = min([i[0] for i in lst])
-    result = [i[1] for i in lst if i[0]==min_time]
-    return result[0]
+# def action_from_obs(o):
+#     lst = []
+#     for i in range(0, MAX_QUEUE_SIZE * JOB_FEATURES, JOB_FEATURES):
+#         if o[i] == 0 and o[i + 1] == 1 and o[i + 2] == 1 and o[i + 3] == 0:
+#             pass
+#         elif o[i] == 1 and o[i + 1] == 1 and o[i + 2] == 1 and o[i + 3] == 1:
+#             pass
+#         else:
+#             lst.append((o[i+1],math.floor(i/JOB_FEATURES)))
+#     min_time = min([i[0] for i in lst])
+#     result = [i[1] for i in lst if i[0]==min_time]
+#     return result[0]
 
 #@profile
 def run_policy(env, get_action, nums, iters, score_type):
@@ -161,11 +161,18 @@ def run_policy(env, get_action, nums, iters, score_type):
     all_data.append(f1_r)
     all_data.append(rl_r)
     #all_data.append(fcfs_r)
+
+
+
+    with open("data.txt", "w") as file:
+        for dataset in all_data:
+            for value in dataset:
+                file.write(f"{value}\n")
     
 
-    all_medians = []
-    for p in all_data:
-        all_medians.append(np.median(p))
+    # all_medians = []
+    # for p in all_data:
+    #     all_medians.append(np.median(p))
 
     # plt.rc("font", size=45)
     # plt.figure(figsize=(12, 7))
