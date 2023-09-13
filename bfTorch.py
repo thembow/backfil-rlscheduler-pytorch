@@ -729,26 +729,18 @@ class HPCEnv(gym.Env):
                 break
 
         while not self.cluster.can_allocated(job):
-            print(f"debug! current rjob = {job.job_id}, requesting {job.request_number_of_processors} procs")
-
             # try to backfill as many jobs as possible. Use FCFS
             self.job_queue.sort(key=lambda _j: self.fcfs_score(_j))
             job_queue_iter_copy = list(self.job_queue)
             job_queue_iter_copy.remove(job) #so we dont try and backfill the relative job
 
-            print("debug! current job queue iter copy jobs:",*job_queue_iter_copy, sep="\n")
 
             for _j in job_queue_iter_copy:
                 if (self.current_timestamp + _j.request_time) < earliest_start_time:
                     if self.cluster.can_allocated(_j):
                         # we should be OK to schedule the job now
-                        try: 
-                            assert _j.scheduled_time == -1  # this job should never be scheduled before.
-                        except:
-                            print(f"debug! assert failed for job {_j.job_id}, already scheduled!")
                         assert _j.scheduled_time == -1  # this job should never be scheduled before.
                         _j.scheduled_time = self.current_timestamp
-                        print(f"debug! job {_j.job_id} scheduled for {_j.scheduled_time} in greedy bf!")
                         _j.allocated_machines = self.cluster.allocate(_j.job_id, _j.request_number_of_processors)
                         self.running_jobs.append(_j)
                         score = self.job_score(_j)   # calculated reward
@@ -817,7 +809,6 @@ class HPCEnv(gym.Env):
                     self.skip_for_resources_greedy(job_for_scheduling, scheduled_logs)
             
             assert job_for_scheduling.scheduled_time == -1  # this job should never be scheduled before.
-            print(f"debug! scheduling job {job_for_scheduling.job_id} for {self.current_timestamp}")
             job_for_scheduling.scheduled_time = self.current_timestamp
             job_for_scheduling.allocated_machines = self.cluster.allocate(job_for_scheduling.job_id,
                                                                         job_for_scheduling.request_number_of_processors)
