@@ -403,25 +403,24 @@ class HPCEnv(gym.Env):
         self.rjob = 0 #rjob = relative job = job we are backfilling relative to
         
 
-        match heuristic: 
-            case "f1":
-                self.heuristic = self.f1_score
-            case "f2":
-                self.heuristic = self.f2_score
-            case "f3":
-                self.heuristic = self.f3_score
-            case "f4":
-                self.heuristic = self.f4_score
-            case "sjf":
-                self.heuristic = self.sjf_score
-            case "smallest":
-                self.heuristic = self.smallest_score
-            case "wfp":
-                self.heuristic = self.wfp_score
-            case "uni":
-                self.heuristic = self.uni_score
-            case "fcfs":
-                self.heuristic = self.fcfs_score
+        if heuristic == "f1":
+            self.heuristic = self.f1_score
+        elif heuristic == "f2":
+            self.heuristic = self.f2_score
+        elif heuristic == "f3":
+            self.heuristic = self.f3_score
+        elif heuristic == "f4":
+            self.heuristic = self.f4_score
+        elif heuristic == "sjf":
+            self.heuristic = self.sjf_score
+        elif heuristic == "smallest":
+            self.heuristic = self.smallest_score
+        elif heuristic == "wfp":
+            self.heuristic = self.wfp_score
+        elif heuristic == "uni":
+            self.heuristic = self.uni_score
+        elif heuristic == "fcfs":
+            self.heuristic = self.fcfs_score
 
 
     #@profile
@@ -600,6 +599,8 @@ class HPCEnv(gym.Env):
         self.backfilling = False #are we currently backfilling?
         self.rjob = 0 #rjob = relative job = job we are backfilling relative to 
 
+
+
         self.pre_workloads = []
         
         assert self.batch_job_slice == 0 or self.batch_job_slice>=job_sequence_size
@@ -728,16 +729,26 @@ class HPCEnv(gym.Env):
                 break
 
         while not self.cluster.can_allocated(job):
+            print(f"debug! current rjob = {job.job_id}, requesting {job.request_number_of_processors} procs")
 
             # try to backfill as many jobs as possible. Use FCFS
             self.job_queue.sort(key=lambda _j: self.fcfs_score(_j))
             job_queue_iter_copy = list(self.job_queue)
+            job_queue_iter_copy.remove(job) #so we dont try and backfill the relative job
+
+            print("debug! current job queue iter copy jobs:",*job_queue_iter_copy, sep="\n")
+
             for _j in job_queue_iter_copy:
                 if (self.current_timestamp + _j.request_time) < earliest_start_time:
                     if self.cluster.can_allocated(_j):
                         # we should be OK to schedule the job now
+                        try: 
+                            assert _j.scheduled_time == -1  # this job should never be scheduled before.
+                        except:
+                            print(f"debug! assert failed for job {_j.job_id}, already scheduled!")
                         assert _j.scheduled_time == -1  # this job should never be scheduled before.
                         _j.scheduled_time = self.current_timestamp
+                        print(f"debug! job {_j.job_id} scheduled for {_j.scheduled_time} in greedy bf!")
                         _j.allocated_machines = self.cluster.allocate(_j.job_id, _j.request_number_of_processors)
                         self.running_jobs.append(_j)
                         score = self.job_score(_j)   # calculated reward
@@ -795,6 +806,7 @@ class HPCEnv(gym.Env):
         while True:
             self.job_queue.sort(key=lambda j: score_fn(j))
             job_for_scheduling = self.job_queue[0]
+            #print(f"debug! total job count ={len(self.job_queue)}")
             # if f:
             #     num_total += 1
             # if selected job needs more resources, skip scheduling and try again after adding new jobs or releasing some resources
@@ -805,6 +817,7 @@ class HPCEnv(gym.Env):
                     self.skip_for_resources_greedy(job_for_scheduling, scheduled_logs)
             
             assert job_for_scheduling.scheduled_time == -1  # this job should never be scheduled before.
+            print(f"debug! scheduling job {job_for_scheduling.job_id} for {self.current_timestamp}")
             job_for_scheduling.scheduled_time = self.current_timestamp
             job_for_scheduling.allocated_machines = self.cluster.allocate(job_for_scheduling.job_id,
                                                                         job_for_scheduling.request_number_of_processors)
@@ -1062,12 +1075,6 @@ class HPCEnv(gym.Env):
 
     def moveforward_for_resources_backfill_modified(self, rjob, job_for_scheduling):
         #note that this function is only called when current job can not be scheduled.
-        #print(f'debug! attempting to backfill! rjob = ${rjob}, job to backfill = ${job_for_scheduling}')
-        # try:
-        #     assert not self.cluster.can_allocated(rjob)
-        # except:
-        #     print(f"debug! rjob {rjob} failed assert check for allocation!")
-        #     sys.exit()
         #got rid of assert here because it seems like it works fine without and control wise it checks below in the while not so it should be fine
 
         earliest_start_time = self.current_timestamp
