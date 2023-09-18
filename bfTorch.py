@@ -356,7 +356,7 @@ JOB_SEQUENCE_SIZE = 256
 SKIP_TIME = 360 # skip 60 seconds
 
 class HPCEnv(gym.Env):
-    def __init__(self,shuffle=False, backfil=False, skip=False, job_score_type=0, batch_job_slice=0, build_sjf=False, heuristic="fcfs"):  # do nothing and return. A workaround for passing parameters to the environment
+    def __init__(self,shuffle=False, backfil=False, skip=False, job_score_type=0, batch_job_slice=0, build_sjf=False, heuristic="fcfs", enable_preworkloads=False):  # do nothing and return. A workaround for passing parameters to the environment
         super(HPCEnv, self).__init__()
         print("Initialize Simple HPC Env")
 
@@ -384,7 +384,9 @@ class HPCEnv(gym.Env):
         self.penalty = 0
         self.pivot_job = False
         self.scheduled_scores = []
-        self.enable_preworkloads = False
+        self.enable_preworkloads = enable_preworkloads
+        if self.enable_preworkloads:
+            self.start = 100000
         self.pre_workloads = []
 
         self.shuffle = shuffle
@@ -430,6 +432,12 @@ class HPCEnv(gym.Env):
         self.cluster = Cluster("Cluster", self.loads.max_nodes, self.loads.max_procs/self.loads.max_nodes)
         self.penalty_job_score = JOB_SEQUENCE_SIZE * self.loads.max_exec_time / 10
 
+        if self.enable_preworkloads:
+            job_sequence_size = JOB_SEQUENCE_SIZE
+            print("pre workloads enabled!")
+            self.gen_preworkloads(job_sequence_size + np.random.randint(job_sequence_size)+10000) #+10000
+        
+
         if self.build_sjf: #this is for trajectory filtering.
             #calculate SJF scores for all sample sequence and save them here
             index = 0
@@ -473,8 +481,7 @@ class HPCEnv(gym.Env):
                 self.job_queue.append(self.loads[self.start])
                 self.next_arriving_job_idx = self.start + 1
 
-                if self.enable_preworkloads:
-                    self.gen_preworkloads(job_sequence_size + self.np_random.randint(job_sequence_size))
+        
 
                 self.sjf_scores.append(sum(self.schedule_curr_sequence_reset(self.sjf_score).values()))
 
@@ -550,6 +557,7 @@ class HPCEnv(gym.Env):
     def gen_preworkloads(self, size):
         # Generate some running jobs to randomly fill the cluster.
         # size = self.np_random.randint(2 * job_sequence_size)
+        #print("ent")
         running_job_size = size
         for i in range(running_job_size):
             _job = self.loads[self.start - i - 1]
@@ -585,6 +593,8 @@ class HPCEnv(gym.Env):
 
         self.current_timestamp = 0
         self.start = 0
+        if self.enable_preworkloads:
+            self.start = 100000
         self.next_arriving_job_idx = 0
         self.last_job_in_batch = 0
         self.num_job_in_batch = 0
@@ -633,7 +643,9 @@ class HPCEnv(gym.Env):
         #for conservative backfilling
 
         if self.enable_preworkloads:
-            self.gen_preworkloads(job_sequence_size + self.np_random.randint(job_sequence_size))
+            job_sequence_size = JOB_SEQUENCE_SIZE
+            print("pre workloads enabled!")
+            self.gen_preworkloads(job_sequence_size + np.random.randint(job_sequence_size)+10000) #+10000
 
         self.scheduled_scores.append(sum(self.schedule_curr_sequence_reset(self.sjf_score).values()))
         self.scheduled_scores.append(sum(self.schedule_curr_sequence_reset(self.f1_score).values()))
@@ -678,11 +690,11 @@ class HPCEnv(gym.Env):
 
         job_sequence_size = num
         assert self.batch_job_slice == 0 or self.batch_job_slice>=job_sequence_size
-        if self.batch_job_slice == 0:
-            self.start = self.np_random.randint(job_sequence_size, (self.loads.size() - job_sequence_size - 1))
-        else:
-            self.start = self.np_random.randint(job_sequence_size, (self.batch_job_slice - job_sequence_size - 1))
-        #self.start = start
+        # if self.batch_job_slice == 0:
+        #     self.start = self.np_random.randint(job_sequence_size, (self.loads.size() - job_sequence_size - 1))
+        # else:
+        #     self.start = self.np_random.randint(job_sequence_size, (self.batch_job_slice - job_sequence_size - 1))
+        self.start = start
         self.start_idx_last_reset = self.start
         self.num_job_in_batch = job_sequence_size
         self.last_job_in_batch = self.start + self.num_job_in_batch
@@ -691,6 +703,10 @@ class HPCEnv(gym.Env):
         self.next_arriving_job_idx = self.start + 1
 
         self.profile_head = None
+        if self.enable_preworkloads:
+            job_sequence_size = JOB_SEQUENCE_SIZE
+            print("pre workloads enabled!")
+            self.gen_preworkloads(job_sequence_size + np.random.randint(job_sequence_size) + 10000)
         #for conservative backfilling
     
     def skip_for_resources_greedy(self, job, scheduled_logs):
@@ -2620,7 +2636,7 @@ with early stopping based on approximate KL
 def ppo(workload_file, model_path, ac_kwargs=dict(), seed=0, 
         traj_per_epoch=4000, epochs=50, gamma=0.99, clip_ratio=0.2, pi_lr=3e-4,
         vf_lr=1e-3, train_pi_iters=80, train_v_iters=80, lam=0.97, max_ep_len=1000,
-        target_kl=0.01, logger_kwargs=dict(), save_freq=10, pre_trained=0, trained_model=None, attn=False,shuffle=False, backfil=False, skip=False, score_type=0, batch_job_slice=0, heuristic="fcfs"):
+        target_kl=0.01, logger_kwargs=dict(), save_freq=10, pre_trained=0, trained_model=None, attn=False,shuffle=False, backfil=False, skip=False, score_type=0, batch_job_slice=0, heuristic="fcfs", enable_preworkloads=False):
 
     # Special function to avoid certain slowdowns from PyTorch + MPI combo.
     setup_pytorch_for_mpi()
@@ -2634,7 +2650,7 @@ def ppo(workload_file, model_path, ac_kwargs=dict(), seed=0,
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    env = HPCEnv(shuffle=shuffle, backfil=backfil, skip=skip, job_score_type=score_type, batch_job_slice=batch_job_slice, build_sjf=False, heuristic=heuristic)
+    env = HPCEnv(shuffle=shuffle, backfil=backfil, skip=skip, job_score_type=score_type, batch_job_slice=batch_job_slice, build_sjf=False, heuristic=heuristic, enable_preworkloads=False)
     env.seed(seed)
     env.my_init(workload_file=workload_file, sched_file=model_path)
     
@@ -2829,6 +2845,7 @@ if __name__ == '__main__':
     parser.add_argument('--score_type', type=int, default=0)
     parser.add_argument('--batch_job_slice', type=int, default=0)
     parser.add_argument('--heuristic', type=str, default='fcfs')
+    parser.add_argument('--enable_preworkloads', type=bool, default='False')
     args = parser.parse_args()
     
     mpi_fork(args.cpu)  # run parallel code with mpi
@@ -2841,4 +2858,4 @@ if __name__ == '__main__':
 
     ppo(workload_file, args.model, gamma=args.gamma, seed=args.seed, traj_per_epoch=args.trajs, epochs=args.epochs,
         logger_kwargs=logger_kwargs, pre_trained=0, attn=args.attn,shuffle=args.shuffle, backfil=args.backfil,
-            skip=args.skip, score_type=args.score_type, batch_job_slice=args.batch_job_slice, heuristic=args.heuristic)
+            skip=args.skip, score_type=args.score_type, batch_job_slice=args.batch_job_slice, heuristic=args.heuristic, enable_preworkloads=args.enable_preworkloads)
