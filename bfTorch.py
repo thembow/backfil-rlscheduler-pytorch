@@ -386,7 +386,7 @@ class HPCEnv(gym.Env):
         self.scheduled_scores = []
         self.enable_preworkloads = enable_preworkloads
         if self.enable_preworkloads:
-            self.start = 100000
+            self.start += 100000
         self.pre_workloads = []
 
         self.shuffle = shuffle
@@ -594,7 +594,7 @@ class HPCEnv(gym.Env):
         self.current_timestamp = 0
         self.start = 0
         if self.enable_preworkloads:
-            self.start = 100000
+            self.start += 100000
         self.next_arriving_job_idx = 0
         self.last_job_in_batch = 0
         self.num_job_in_batch = 0

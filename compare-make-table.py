@@ -79,7 +79,7 @@ def run_policy(env, get_action, nums, iters, score_type):
     # time_total = 0
     # num_total = 0
     for iter_num in range(0, iters):
-        start = iter_num * args.len
+        start = iter_num * args.len +100000 #for gen_preworkloads +100000
         env.reset_for_test(nums, start)
         f1_r.append(sum(env.schedule_curr_sequence_reset(env.f1_score).values()))
         # f2_r.append(sum(env.schedule_curr_sequence_reset(env.f2_score).values()))
@@ -175,6 +175,7 @@ if __name__ == '__main__':
     parser.add_argument('--score_type', type=int, default=0)
     parser.add_argument('--batch_job_slice', type=int, default=10000)
     parser.add_argument('--heuristic', type=str, default='fcfs')
+    parser.add_argument('--enable_preworkloads', type=bool, default=False)
 
     args = parser.parse_args()
 
@@ -186,7 +187,7 @@ if __name__ == '__main__':
 
     # initialize the environment from scratch
     env = HPCEnv(shuffle=args.shuffle, backfil=args.backfil, skip=args.skip, job_score_type=args.score_type,
-                 batch_job_slice=args.batch_job_slice, build_sjf=False, heuristic=args.heuristic)
+                 batch_job_slice=args.batch_job_slice, build_sjf=False, heuristic=args.heuristic, enable_preworkloads=args.enable_preworkloads)
     env.my_init(workload_file=workload_file)
     env.seed(args.seed)
 
