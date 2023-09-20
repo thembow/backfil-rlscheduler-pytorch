@@ -403,6 +403,8 @@ class HPCEnv(gym.Env):
         #section for backfilling variables
         self.backfilling = False #are we currently backfilling?
         self.rjob = 0 #rjob = relative job = job we are backfilling relative to
+        self.delay = 0
+        self.action_count = 0
         
 
         if heuristic == "f1":
@@ -608,6 +610,8 @@ class HPCEnv(gym.Env):
         #section for backfilling variables
         self.backfilling = False #are we currently backfilling?
         self.rjob = 0 #rjob = relative job = job we are backfilling relative to 
+        self.delay = 0
+        self.action_count = 0
 
 
 
@@ -687,6 +691,8 @@ class HPCEnv(gym.Env):
         #section for backfilling variables
         self.backfilling = False #are we currently backfilling?
         self.rjob = 0 #rjob = relative job = job we are backfilling relative to 
+        self.delay = 0
+        self.action_count = 0
 
         job_sequence_size = num
         assert self.batch_job_slice == 0 or self.batch_job_slice>=job_sequence_size
@@ -1106,6 +1112,17 @@ class HPCEnv(gym.Env):
                 self.scheduled_rl[_j.job_id] = score
                 self.job_queue.remove(_j)  # remove the job from job queue
 
+            new_earliest_start_time = self.current_timestamp
+            self.running_jobs.sort(key=lambda running_job: (running_job.scheduled_time + running_job.request_time))
+            free_processors = self.cluster.free_node * self.cluster.num_procs_per_node
+            for running_job in self.running_jobs:
+                free_processors += len(running_job.allocated_machines) * self.cluster.num_procs_per_node
+                new_earliest_start_time = (running_job.scheduled_time + running_job.request_time)
+                if free_processors >= rjob.request_number_of_processors:
+                    break
+            self.delay += new_earliest_start_time-earliest_start_time 
+            self.action_count += 1
+
             # move to the next timestamp
             assert self.running_jobs
             self.running_jobs.sort(key=lambda running_job: (running_job.scheduled_time + running_job.run_time))
@@ -1356,7 +1373,7 @@ class HPCEnv(gym.Env):
             sjf = self.scheduled_scores[0]
             f1 = self.scheduled_scores[1]
             rwd2 = (best_total - rl_total)
-            rwd = -rl_total
+            rwd = -rl_total - self.delay/self.action_count
             '''
             if (best_total) < rl_total:
                 rwd = -1
@@ -2785,7 +2802,7 @@ def ppo(workload_file, model_path, ac_kwargs=dict(), seed=0,
             if d:
                 t += 1
                 buf.finish_path(r)
-                logger.store(EpRet=ep_ret, EpLen=ep_len, ShowRet=show_ret, SJF=sjf, F1=f1)
+                logger.store(EpRet=ep_ret, EpLen=ep_len, ShowRet=show_ret, Delay=env.delay/env.action_count, SJF=sjf, F1=f1)
                 [o, co], r, d, ep_ret, ep_len, show_ret, sjf, f1 = env.reset(), 0, False, 0, 0, 0, 0, 0
                 if t >= local_traj_per_epoch:
                     # print ("state:", state, "\nlast action in a traj: action_probs:\n", action_probs, "\naction:", action)
@@ -2814,6 +2831,7 @@ def ppo(workload_file, model_path, ac_kwargs=dict(), seed=0,
         logger.log_tabular('ClipFrac', average_only=True)
         logger.log_tabular('StopIter', average_only=True)
         logger.log_tabular('ShowRet', average_only=True)
+        logger.log_tabular('Delay', average_only=True)
         logger.log_tabular('SJF', average_only=True)
         logger.log_tabular('F1', average_only=True)
         logger.log_tabular('Time', MPI.Wtime()-start_time)
@@ -2845,7 +2863,7 @@ if __name__ == '__main__':
     parser.add_argument('--score_type', type=int, default=0)
     parser.add_argument('--batch_job_slice', type=int, default=0)
     parser.add_argument('--heuristic', type=str, default='fcfs')
-    parser.add_argument('--enable_preworkloads', type=bool, default='False')
+    parser.add_argument('--enable_preworkloads', type=int, default=0)
     args = parser.parse_args()
     
     mpi_fork(args.cpu)  # run parallel code with mpi
