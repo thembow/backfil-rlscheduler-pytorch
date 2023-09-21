@@ -1373,7 +1373,10 @@ class HPCEnv(gym.Env):
             sjf = self.scheduled_scores[0]
             f1 = self.scheduled_scores[1]
             rwd2 = (best_total - rl_total)
-            rwd = -rl_total - self.delay/self.action_count
+            if self.action_count == 0:
+                self.action_count += 1
+                #added to fix divide by 0 bug
+            rwd = -rl_total - self.delay/self.action_count #added to fix divide by 0 bug
             '''
             if (best_total) < rl_total:
                 rwd = -1
@@ -2802,7 +2805,7 @@ def ppo(workload_file, model_path, ac_kwargs=dict(), seed=0,
             if d:
                 t += 1
                 buf.finish_path(r)
-                logger.store(EpRet=ep_ret, EpLen=ep_len, ShowRet=show_ret, Delay=env.delay/env.action_count, SJF=sjf, F1=f1)
+                logger.store(EpRet=ep_ret, EpLen=ep_len, ShowRet=show_ret, Delay=env.delay/env.action_count, SJF=sjf, F1=f1, Backfills=env.action_count)
                 [o, co], r, d, ep_ret, ep_len, show_ret, sjf, f1 = env.reset(), 0, False, 0, 0, 0, 0, 0
                 if t >= local_traj_per_epoch:
                     # print ("state:", state, "\nlast action in a traj: action_probs:\n", action_probs, "\naction:", action)
@@ -2834,6 +2837,7 @@ def ppo(workload_file, model_path, ac_kwargs=dict(), seed=0,
         logger.log_tabular('Delay', average_only=True)
         logger.log_tabular('SJF', average_only=True)
         logger.log_tabular('F1', average_only=True)
+        logger.log_tabular('Backfills', average_only=True)
         logger.log_tabular('Time', MPI.Wtime()-start_time)
         logger.dump_tabular()
 
