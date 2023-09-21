@@ -61,7 +61,7 @@ def load_pytorch_policy(fpath, itr, deterministic=False):
 
 
 # @profile
-def run_policy(env, get_action, nums, iters, score_type):
+def run_policy(env, get_action, nums, iters, score_type, enable_preworkloads=False):
     assert env is not None, \
         "Environment not found!\n\n It looks like the environment wasn't saved, " + \
         "and we can't run the agent in it. :( \n\n Check out the readthedocs " + \
@@ -79,7 +79,9 @@ def run_policy(env, get_action, nums, iters, score_type):
     # time_total = 0
     # num_total = 0
     for iter_num in range(0, iters):
-        start = iter_num * args.len +100000 #for gen_preworkloads +100000
+        start = iter_num * args.len  #for gen_preworkloads +100000
+        if enable_preworkloads:
+            start += 100000
         env.reset_for_test(nums, start)
         f1_r.append(sum(env.schedule_curr_sequence_reset(env.f1_score).values()))
         # f2_r.append(sum(env.schedule_curr_sequence_reset(env.f2_score).values()))
@@ -192,5 +194,5 @@ if __name__ == '__main__':
     env.seed(args.seed)
 
     start = time.time()
-    run_policy(env, get_action, args.len, args.iter, args.score_type)
+    run_policy(env, get_action, args.len, args.iter, args.score_type, args.enable_preworkloads)
     print("elapse: {}".format(time.time() - start))
