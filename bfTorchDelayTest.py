@@ -710,6 +710,8 @@ class HPCEnv(gym.Env):
         self.current_timestamp = self.loads[self.start].submit_time
         self.job_queue.append(self.loads[self.start])
         self.next_arriving_job_idx = self.start + 1
+        
+        self.bf_skips = 0
 
         self.profile_head = None
         if self.enable_preworkloads:
@@ -1129,6 +1131,7 @@ class HPCEnv(gym.Env):
         #how many cases of expected wait are negative?
         delay = (new_earliest_start_time - earliest_start_time) / expected_wait
         if delay >= 3:
+            self.bf_skips += 1
             print(f"DEBUG! delay={delay} is too high for backfilling {temp_job}")
             return self.skip_schedule()[0]
         
@@ -1464,6 +1467,7 @@ class HPCEnv(gym.Env):
             self.post_process_score(self.scheduled_rl)
             rl_total = sum(self.scheduled_rl.values())
             #modified for delay score returning!
+            print("debug! {self.bf_skips} skips, {self.action_count} actual backfills")
             #print(f"debug! delay = {sum(self.delay)}, action count={self.action_count}, delay score={sum(self.delay)/self.action_count}")
             return [None, self.delay, self.action_count, True]
       
