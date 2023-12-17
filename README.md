@@ -6,7 +6,7 @@ The code has been tested on Ubuntu 18.04 with PyTorch 1.13 and Gym 0.21.
 ## Installation
 ### Required Software
 * Python 3.9 and PyTorch
-Use VirtuanEnv or Conda to build a Python3.9 environment and PyTorch at least 1.13.0
+Use VirtualEnv or Conda to build a Python3.9 environment and PyTorch at least 1.13.0
 Note that, we do not leverage GPUs, so no need to configure the GPU version of PyTorch.
 
 * OpenMPI and mpi4py
