@@ -94,7 +94,7 @@ class Job:
         
         # if we use the job's request time field
         # for model, request_time might be empty. In this case, we set request_time to the run_time
-        self.request_time = self.run_time#int(s_array[8])
+        self.request_time = int(s_array[8])
         if self.request_time == -1:
             self.request_time = self.run_time
 
@@ -1106,7 +1106,7 @@ class HPCEnv(gym.Env):
                 break
 
         import copy
-        temp_running_jobs = self.running_jobs.copy()
+        temp_running_jobs = copy.deepcopy(self.running_jobs)
         #not sure if this is really necessary. I just want to make a copy of the job for theoretical scheduling reasons
         temp_job = copy.deepcopy(job_for_scheduling)
         temp_request_nodes = int(math.ceil(float(temp_job.request_number_of_processors) / float(self.cluster.num_procs_per_node)))
