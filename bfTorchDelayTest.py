@@ -751,7 +751,7 @@ class HPCEnv(gym.Env):
         free_processors = self.cluster.free_node * self.cluster.num_procs_per_node
         for running_job in self.running_jobs:
             free_processors += len(running_job.allocated_machines) * self.cluster.num_procs_per_node
-            earliest_start_time = (running_job.scheduled_time + (running_job.request_time + (running_job.request_time * 0.04124567322)))
+            earliest_start_time = (running_job.scheduled_time + (running_job.request_time))
             if free_processors >= job.request_number_of_processors:
                 break
 
@@ -1440,7 +1440,7 @@ class HPCEnv(gym.Env):
             if not done:
                 #print(f'debug! backfilling not done for rjob = {self.rjob}, asking for new job to backfill')
                 obs = self.build_observation()
-                return [obs, 0, False, 0]
+                return [obs, 0, 0, False]
             # return to ask for another job to backfill
             if done:
                 #print("debug! done backfilling!")
@@ -1467,9 +1467,9 @@ class HPCEnv(gym.Env):
             self.post_process_score(self.scheduled_rl)
             rl_total = sum(self.scheduled_rl.values())
             #modified for delay score returning!
-            print("debug! {self.bf_skips} skips, {self.action_count} actual backfills")
+            print(f"{self.bf_skips / self.action_count}% backfill skips or {self.bf_skips} skips and {self.action_count} backfills")
             #print(f"debug! delay = {sum(self.delay)}, action count={self.action_count}, delay score={sum(self.delay)/self.action_count}")
-            return [None, self.delay, self.action_count, True]
+            return [None, rl_total, self.delay, True]
       
     def find_anchor_point(self, job):
         """using proc profile, find earliest time when job can start."""

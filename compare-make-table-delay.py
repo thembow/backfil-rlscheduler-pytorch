@@ -129,11 +129,11 @@ def run_policy(env, get_action, nums, iters, score_type, enable_preworkloads=Fal
             #     print("SKIP" + "(" + str(count) + ")", end="|")
             # else:
             #     print (str(a)+"("+str(count)+")", end="|")
-            o, r, ac, d = env.step_for_test(a)
+            o, r, delay, d = env.step_for_test(a)
             if d:
                 #print(f"debug! r={r}, ac={ac}, d={d}")
-                rl += sum(r) / d
-                delay_r.extend(r)
+                rl += r
+                delay_r.extend(delay)
                 # print("RL decision ratio:",rl_decisions/total_decisions)
                 print("Sequence Length:",rl_decisions)
                 break
