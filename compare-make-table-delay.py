@@ -75,6 +75,8 @@ def run_policy(env, get_action, nums, iters, score_type, enable_preworkloads=Fal
     # small_r = []
     wfp_r = []
     uni_r = []
+    skip_total = 0
+    action_total = 0 
 
     fcfs_r = []
 
@@ -129,11 +131,13 @@ def run_policy(env, get_action, nums, iters, score_type, enable_preworkloads=Fal
             #     print("SKIP" + "(" + str(count) + ")", end="|")
             # else:
             #     print (str(a)+"("+str(count)+")", end="|")
-            o, r, delay, d = env.step_for_test(a)
+            o, r, delay, skips, d = env.step_for_test(a)
             if d:
                 #print(f"debug! r={r}, ac={ac}, d={d}")
                 rl += r
                 delay_r.extend(delay)
+                skip_total += skips[0]
+                action_total += skips[1]
                 # print("RL decision ratio:",rl_decisions/total_decisions)
                 print("Sequence Length:",rl_decisions)
                 break
@@ -160,6 +164,8 @@ def run_policy(env, get_action, nums, iters, score_type, enable_preworkloads=Fal
     print(*all_means, sep=', ')
     #print(*delay_r, sep = ", ")
     print(f"Maximum: {np.max(delay_r)}, 99th Percentile: {np.percentile(delay_r, 99)}")
+    print(f"Final Skip Report: {skip_total / action_total}% backfill skips or {skip_total} skips and {action_total} backfills")
+
 
 
 

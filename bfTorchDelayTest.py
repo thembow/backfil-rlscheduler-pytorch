@@ -1132,7 +1132,7 @@ class HPCEnv(gym.Env):
         delay = (new_earliest_start_time - earliest_start_time) / expected_wait
         if delay >= 3:
             self.bf_skips += 1
-            print(f"DEBUG! delay={delay} is too high for backfilling {temp_job}")
+            #print(f"DEBUG! delay={delay} is too high for backfilling {temp_job}")
             return self.skip_schedule()[0]
         
         while not self.cluster.can_allocated(rjob):
@@ -1440,7 +1440,7 @@ class HPCEnv(gym.Env):
             if not done:
                 #print(f'debug! backfilling not done for rjob = {self.rjob}, asking for new job to backfill')
                 obs = self.build_observation()
-                return [obs, 0, 0, False]
+                return [obs, 0, 0, [], False]
             # return to ask for another job to backfill
             if done:
                 #print("debug! done backfilling!")
@@ -1462,14 +1462,14 @@ class HPCEnv(gym.Env):
 
         if not done:
             obs = self.build_observation()
-            return [obs, 0, 0, False]
+            return [obs, 0, 0, [], False]
         else:
             self.post_process_score(self.scheduled_rl)
             rl_total = sum(self.scheduled_rl.values())
             #modified for delay score returning!
             print(f"{self.bf_skips / self.action_count}% backfill skips or {self.bf_skips} skips and {self.action_count} backfills")
             #print(f"debug! delay = {sum(self.delay)}, action count={self.action_count}, delay score={sum(self.delay)/self.action_count}")
-            return [None, rl_total, self.delay, True]
+            return [None, rl_total, self.delay, [self.bf_skips, self.action_count], True]
       
     def find_anchor_point(self, job):
         """using proc profile, find earliest time when job can start."""
