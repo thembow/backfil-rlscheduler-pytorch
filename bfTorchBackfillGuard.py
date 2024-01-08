@@ -1448,7 +1448,7 @@ class HPCEnv(gym.Env):
             done, _ = self.skip_schedule()
         else:
             #print("debug! scheduling via heuristic!")
-            done = self.schedule_curr_sequence(self.sjf_score)
+            done = self.schedule_curr_sequence(self.heuristic)
             #schedule using modified heuristic scheduling, maybe include argument in the program to change this for testing purposes???            
 
         if not done:

@@ -1108,7 +1108,7 @@ class HPCEnv(gym.Env):
                 break
         
         import copy
-        temp_running_jobs = self.running_jobs.copy()
+        temp_running_jobs = copy.deepcopy(self.running_jobs)
         #not sure if this is really necessary. I just want to make a copy of the job for theoretical scheduling reasons
         temp_job = copy.deepcopy(job_for_scheduling)
         temp_request_nodes = int(math.ceil(float(temp_job.request_number_of_processors) / float(self.cluster.num_procs_per_node)))
@@ -1457,7 +1457,7 @@ class HPCEnv(gym.Env):
             done, _ = self.skip_schedule()
         else:
             #print("debug! scheduling via heuristic!")
-            done = self.schedule_curr_sequence(self.fcfs_score)
+            done = self.schedule_curr_sequence(self.heuristic)
             #schedule using modified heuristic scheduling, maybe include argument in the program to change this for testing purposes???            
 
         if not done:
