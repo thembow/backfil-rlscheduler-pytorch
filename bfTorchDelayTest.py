@@ -1147,24 +1147,23 @@ class HPCEnv(gym.Env):
                 self.scheduled_rl[_j.job_id] = score
                 self.job_queue.remove(_j)  # remove the job from job queue
 
+                new_earliest_start_time = self.current_timestamp
+                self.running_jobs.sort(key=lambda running_job: (running_job.scheduled_time + running_job.request_time))
+                free_processors = self.cluster.free_node * self.cluster.num_procs_per_node
+                for running_job in self.running_jobs:
+                    free_processors += len(running_job.allocated_machines) * self.cluster.num_procs_per_node
+                    new_earliest_start_time = (running_job.scheduled_time + running_job.request_time)
+                    if free_processors >= rjob.request_number_of_processors:
+                        break
+                expected_wait = (earliest_start_time - rjob.submit_time) if (earliest_start_time - rjob.submit_time) > 0 else 1
+                #how many cases of expected wait are negative?
+                delay = (new_earliest_start_time - earliest_start_time) / expected_wait
+                #rjob_node = int(math.ceil(float(rjob.request_number_of_processors)/float(self.cluster.num_procs_per_node)))
+                #bf_node = int(math.ceil(float(_j.request_number_of_processors)/float(self.cluster.num_procs_per_node)))
 
-            new_earliest_start_time = self.current_timestamp
-            self.running_jobs.sort(key=lambda running_job: (running_job.scheduled_time + running_job.request_time))
-            free_processors = self.cluster.free_node * self.cluster.num_procs_per_node
-            for running_job in self.running_jobs:
-                free_processors += len(running_job.allocated_machines) * self.cluster.num_procs_per_node
-                new_earliest_start_time = (running_job.scheduled_time + running_job.request_time)
-                if free_processors >= rjob.request_number_of_processors:
-                    break
-            expected_wait = (earliest_start_time - rjob.submit_time) if (earliest_start_time - rjob.submit_time) > 0 else 1
-            #how many cases of expected wait are negative?
-            delay = (new_earliest_start_time - earliest_start_time) / expected_wait
-            #rjob_node = int(math.ceil(float(rjob.request_number_of_processors)/float(self.cluster.num_procs_per_node)))
-            #bf_node = int(math.ceil(float(_j.request_number_of_processors)/float(self.cluster.num_procs_per_node)))
-
-            #print(f"expected wait = {expected_wait}, delay = {delay}, earliest_start={earliest_start_time}, new_earliest={new_earliest_start_time}, submit_time={rjob.submit_time}, rjob_node={rjob_node}, bf_node={bf_node}, free_node={self.cluster.free_node}")
-            self.delay.append(delay) if delay >= 0 else 0
-            self.action_count += 1
+                #print(f"expected wait = {expected_wait}, delay = {delay}, earliest_start={earliest_start_time}, new_earliest={new_earliest_start_time}, submit_time={rjob.submit_time}, rjob_node={rjob_node}, bf_node={bf_node}, free_node={self.cluster.free_node}")
+                self.delay.append(delay) if delay >= 0 else 0
+                self.action_count += 1
 
             # move to the next timestamp
             assert self.running_jobs
@@ -1404,7 +1403,6 @@ class HPCEnv(gym.Env):
             done, _ = self.skip_schedule()
         else:
             done = self.schedule_curr_sequence(self.heuristic)
-            #schedule using modified heuristic scheduling, maybe include argument in the program to change this for testing purposes???            
 
         if not done:
             obs = self.build_observation()
