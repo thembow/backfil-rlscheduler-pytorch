@@ -1485,6 +1485,7 @@ class HPCEnv(gym.Env):
             rl_total = sum(self.scheduled_rl.values())
             #modified for delay score returning!
             print(f"{self.bf_skips / self.action_count}% backfill skips or {self.bf_skips} skips and {self.action_count} backfills")
+            print(f"{self.sjf_backfills / self.action_count}% sjf backfills or {self.sjf_backfills} sjf backfills and {self.action_count} backfills")
             #print(f"debug! delay = {sum(self.delay)}, action count={self.action_count}, delay score={sum(self.delay)/self.action_count}")
             return [None, rl_total, self.delay, [self.bf_skips, self.action_count, self.sjf_backfills], True]
       

@@ -97,7 +97,7 @@ def run_policy(env, get_action, nums, iters, score_type, enable_preworkloads=Fal
         # small_r.append(sum(env.schedule_curr_sequence_reset(env.smallest_score).values()))
         fcfs_results, fcfs_delay_arr  = env.schedule_curr_sequence_reset(env.fcfs_score)
         delay_fcfs_r.extend(fcfs_delay_arr)
-        fcfs_r.append(sum(fcfs_results.values()))
+        #fcfs_r.append(sum(fcfs_results.values()))
 
         o = env.build_observation()
         rl = 0
@@ -169,8 +169,8 @@ def run_policy(env, get_action, nums, iters, score_type, enable_preworkloads=Fal
     #print(*delay_r, sep = ", ")
     print(f"Maximum: {np.max(delay_r)}, 99th Percentile: {np.percentile(delay_r, 99)}")
     print(f"Final Skip Report: {skip_total / action_total}% backfill skips or {skip_total} skips and {action_total} backfills")
-    print(f"Final SJFness Report: {sjf_backfills / action_total}% backfill skips or {sjf_backfills} skips and {action_total} backfills")
-    print(f"best fit delay report: Maximum: {np.max(delay_fcfs_r)}, 99th Percentile: {np.percentile(delay_fcfs_r, 99)}")
+    print(f"Final SJFness Report: {sjf_backfills / action_total}% sjf backfills or {sjf_backfills} sjf backfills and {action_total} backfills")
+    #print(f"best fit delay report: Maximum: {np.max(delay_fcfs_r)}, 99th Percentile: {np.percentile(delay_fcfs_r, 99)}")
 
 
 
