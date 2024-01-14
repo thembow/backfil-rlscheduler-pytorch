@@ -1156,8 +1156,8 @@ class HPCEnv(gym.Env):
                 self.job_queue.sort(key=lambda j: self.sjf_score(j))
                 sjf_id = self.job_queue[0].job_id
                 if sjf_id == _j.job_id:
-                    print("sjf job backfilled!")
-                self.sjf_backfills += 1
+                    #print("sjf job backfilled!")
+                    self.sjf_backfills += 1
 
                 _j.scheduled_time = self.current_timestamp
                 _j.allocated_machines = self.cluster.allocate(_j.job_id, _j.request_number_of_processors)
