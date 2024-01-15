@@ -615,6 +615,7 @@ class HPCEnv(gym.Env):
         self.rjob = 0 #rjob = relative job = job we are backfilling relative to 
         self.delay = []
         self.action_count = 0
+        self.sjf_backfills = 0
 
 
 
@@ -696,6 +697,7 @@ class HPCEnv(gym.Env):
         self.rjob = 0 #rjob = relative job = job we are backfilling relative to 
         self.delay = []
         self.action_count = 0
+        self.sjf_backfills = 0
 
         job_sequence_size = num
         assert self.batch_job_slice == 0 or self.batch_job_slice>=job_sequence_size
@@ -1123,7 +1125,7 @@ class HPCEnv(gym.Env):
                 break
         
         import copy
-        temp_running_jobs = copy.deepcopy(self.running_jobs)
+        temp_running_jobs = self.running_jobs.copy()
         #not sure if this is really necessary. I just want to make a copy of the job for theoretical scheduling reasons
         temp_job = copy.deepcopy(job_for_scheduling)
         temp_request_nodes = int(math.ceil(float(temp_job.request_number_of_processors) / float(self.cluster.num_procs_per_node)))
@@ -1155,6 +1157,11 @@ class HPCEnv(gym.Env):
             if self.cluster.can_allocated(_j):
                 # we should be OK to schedule the job now
                 assert _j.scheduled_time == -1  # this job should never be scheduled before.
+                self.job_queue.sort(key=lambda j: self.sjf_score(j))
+                sjf_id = self.job_queue[0].job_id
+                if sjf_id == _j.job_id:
+                    #print("sjf job backfilled!")
+                    self.sjf_backfills += 1
                 _j.scheduled_time = self.current_timestamp
                 _j.allocated_machines = self.cluster.allocate(_j.job_id, _j.request_number_of_processors)
                 self.running_jobs.append(_j)
@@ -1480,11 +1487,10 @@ class HPCEnv(gym.Env):
         else:
             self.post_process_score(self.scheduled_rl)
             rl_total = sum(self.scheduled_rl.values())
-            print(f"rl_total={rl_total}")
-            #modified for delay score returning!
             print(f"{self.bf_skips / self.action_count}% backfill skips or {self.bf_skips} skips and {self.action_count} backfills")
+            print(f"{self.sjf_backfills / self.action_count}% sjf backfills or {self.sjf_backfills} sjf backfills and {self.action_count} backfills")
             #print(f"debug! delay = {sum(self.delay)}, action count={self.action_count}, delay score={sum(self.delay)/self.action_count}")
-            return [None, rl_total, self.delay, [self.bf_skips, self.action_count], True]
+            return [None, rl_total, self.delay, [self.bf_skips, self.action_count, self.sjf_backfills], True]
       
     def find_anchor_point(self, job):
         """using proc profile, find earliest time when job can start."""
