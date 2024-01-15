@@ -403,7 +403,7 @@ class HPCEnv(gym.Env):
         #section for backfilling variables
         self.backfilling = False #are we currently backfilling?
         self.rjob = 0 #rjob = relative job = job we are backfilling relative to
-        self.delay = []
+        self.delay = 0
         self.action_count = 0
         
 
@@ -613,7 +613,7 @@ class HPCEnv(gym.Env):
         #section for backfilling variables
         self.backfilling = False #are we currently backfilling?
         self.rjob = 0 #rjob = relative job = job we are backfilling relative to 
-        self.delay = []
+        self.delay = 0
         self.action_count = 0
         self.sjf_backfills = 0
         self.total_backfills = 0
@@ -696,7 +696,7 @@ class HPCEnv(gym.Env):
         #section for backfilling variables
         self.backfilling = False #are we currently backfilling?
         self.rjob = 0 #rjob = relative job = job we are backfilling relative to 
-        self.delay = []
+        self.delay = 0
         self.action_count = 0
         self.sjf_backfills = 0
         self.total_backfills = 0
@@ -1198,7 +1198,7 @@ class HPCEnv(gym.Env):
                 #bf_node = int(math.ceil(float(_j.request_number_of_processors)/float(self.cluster.num_procs_per_node)))
 
                 #print(f"expected wait = {expected_wait}, delay = {delay}, earliest_start={earliest_start_time}, new_earliest={new_earliest_start_time}, submit_time={rjob.submit_time}, rjob_node={rjob_node}, bf_node={bf_node}, free_node={self.cluster.free_node}")
-                self.delay.append(delay) if delay >= 0 else 0
+                self.delay += delay if delay >= 0 else 0
                 self.action_count += 1
 
                 #move to the next timestamp
