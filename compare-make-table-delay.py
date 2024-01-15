@@ -77,6 +77,7 @@ def run_policy(env, get_action, nums, iters, score_type, enable_preworkloads=Fal
     uni_r = []
     skip_total = 0
     action_total = 0 
+    sjf_backfills = 0
 
     fcfs_r = []
 
@@ -138,6 +139,7 @@ def run_policy(env, get_action, nums, iters, score_type, enable_preworkloads=Fal
                 delay_r.extend(delay)
                 skip_total += skips[0]
                 action_total += skips[1]
+                sjf_backfills += skips[2]
                 # print("RL decision ratio:",rl_decisions/total_decisions)
                 print("Sequence Length:",rl_decisions)
                 break
@@ -165,6 +167,8 @@ def run_policy(env, get_action, nums, iters, score_type, enable_preworkloads=Fal
     #print(*delay_r, sep = ", ")
     print(f"Maximum: {np.max(delay_r)}, 99th Percentile: {np.percentile(delay_r, 99)}")
     print(f"Final Skip Report: {skip_total / action_total}% backfill skips or {skip_total} skips and {action_total} backfills")
+    print(f"Final SJFness Report: {sjf_backfills / action_total}% sjf backfills or {sjf_backfills} sjf backfills and {action_total} backfills")
+
 
 
 
