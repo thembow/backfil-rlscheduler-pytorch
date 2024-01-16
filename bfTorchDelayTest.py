@@ -916,7 +916,7 @@ class HPCEnv(gym.Env):
                                                                         job_for_scheduling.request_number_of_processors)
             self.running_jobs.append(job_for_scheduling)
             score = self.job_score(job_for_scheduling)  # calculated reward
-            scheduled_logs[job_for_scheduling.job_id] = score
+            self.scheduled_rl[job_for_scheduling.job_id] = score
             self.job_queue.remove(job_for_scheduling)
 
             not_empty = self.moveforward_for_job()
