@@ -94,7 +94,7 @@ class Job:
         
         # if we use the job's request time field
         # for model, request_time might be empty. In this case, we set request_time to the run_time
-        self.request_time = int(s_array[8])
+        self.request_time = self.run_time
         if self.request_time == -1:
             self.request_time = self.run_time
 
