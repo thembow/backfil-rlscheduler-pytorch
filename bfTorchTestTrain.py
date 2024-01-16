@@ -617,6 +617,7 @@ class HPCEnv(gym.Env):
         self.action_count = 0
         self.sjf_backfills = 0
         self.total_backfills = 0
+        self.bf_skips = 0
 
 
 
