@@ -403,7 +403,7 @@ class HPCEnv(gym.Env):
         #section for backfilling variables
         self.backfilling = False #are we currently backfilling?
         self.rjob = 0 #rjob = relative job = job we are backfilling relative to
-        self.delay = 0
+        self.delay = []
         self.action_count = 0
         
 
@@ -613,7 +613,7 @@ class HPCEnv(gym.Env):
         #section for backfilling variables
         self.backfilling = False #are we currently backfilling?
         self.rjob = 0 #rjob = relative job = job we are backfilling relative to 
-        self.delay = 0
+        self.delay = []
         self.action_count = 0
         self.sjf_backfills = 0
         self.total_backfills = 0
@@ -696,7 +696,7 @@ class HPCEnv(gym.Env):
         #section for backfilling variables
         self.backfilling = False #are we currently backfilling?
         self.rjob = 0 #rjob = relative job = job we are backfilling relative to 
-        self.delay = 0
+        self.delay = []
         self.action_count = 0
         self.sjf_backfills = 0
         self.total_backfills = 0
@@ -811,24 +811,9 @@ class HPCEnv(gym.Env):
             for i in scheduled_logs:
                 scheduled_logs[i] /= self.num_job_in_batch
         elif self.job_score_type == 3:
-            start = self.loads[self.start+JOB_SEQUENCE_SIZE//100].submit_time
-            end = self.loads[self.last_job_in_batch-1].scheduled_time
-            #start = 0.15*(self.current_timestamp-self.loads[self.start].submit_time)+self.loads[self.start].submit_time
-            #end = 0.85*(self.current_timestamp-self.loads[self.start].submit_time)+self.loads[self.start].submit_time
-            total_cpu_hour = (end - start)*self.loads.max_procs
-            s = 0
+            total_cpu_hour = (self.current_timestamp - self.loads[self.start].submit_time)*self.loads.max_procs
             for i in scheduled_logs:
-                j = scheduled_logs[i]
-                if j.scheduled_time >= start and j.scheduled_time+j.run_time<=end:
-                    s += -float(j.run_time*j.request_number_of_processors)
-                elif j.scheduled_time < start and j.scheduled_time+j.run_time>start:
-                    s += -float((j.scheduled_time+j.run_time-start)*j.request_number_of_processors)
-                elif j.scheduled_time+j.run_time>end and j.scheduled_time<end:
-                    s += -float((end-j.scheduled_time)*j.request_number_of_processors)
-            s /= total_cpu_hour
-            n = len(scheduled_logs)
-            for i in scheduled_logs:
-                scheduled_logs[i] = s/n
+                scheduled_logs[i] /= total_cpu_hour
         elif self.job_score_type == 4:
             for i in scheduled_logs:
                 scheduled_logs[i] /= self.num_job_in_batch
@@ -920,7 +905,7 @@ class HPCEnv(gym.Env):
                                                                         job_for_scheduling.request_number_of_processors)
             self.running_jobs.append(job_for_scheduling)
             score = self.job_score(job_for_scheduling)  # calculated reward
-            scheduled_logs[job_for_scheduling.job_id] = score
+            self.scheduled_rl[_j.job_id] = score
             self.job_queue.remove(job_for_scheduling)
 
             not_empty = self.moveforward_for_job()
@@ -1048,7 +1033,7 @@ class HPCEnv(gym.Env):
         self.pairs = []
         add_skip = False
         for i in range(0, MAX_QUEUE_SIZE):
-            if i < len(self.visible_jobs) and i < (MAX_QUEUE_SIZE ) and self.cluster.can_allocated(self.visible_jobs[i]):
+            if i < len(self.visible_jobs) and i < (MAX_QUEUE_SIZE ):
                 job = self.visible_jobs[i]
                 submit_time = job.submit_time
                 request_processors = job.request_number_of_processors
@@ -1111,8 +1096,13 @@ class HPCEnv(gym.Env):
             vector[i*JOB_FEATURES:(i+1)*JOB_FEATURES] = self.pairs[i][1:]
 
         return vector
+        
     def canBackfill(self):
-        bf_jobs = self.visible_jobs = [x for x in self.visible_jobs if self.cluster.can_allocated(x)]
+        bf_jobs = [x for x in self.visible_jobs if self.cluster.can_allocated(x)]
+        # for _j in self.job_queue:
+        #     free_processors = self.cluster.free_node * self.cluster.num_procs_per_node
+        #     if _j.request_number_of_processors <= free_processors:
+        #         bf_jobs.append(_j)
         if len(bf_jobs) > 0:
             return True
         return False
@@ -1121,9 +1111,7 @@ class HPCEnv(gym.Env):
         #note that this function is only called when current job can not be scheduled.
         #got rid of assert here because it seems like it works fine without and control wise it checks below in the while not so it should be fine
         
-        if not self.canBackfill():
-            #print(f"debug! no jobs available for backfill! skipping")
-            return self.skip_schedule()[0]
+        
 
         earliest_start_time = self.current_timestamp
         # sort all running jobs by estimated finish time
@@ -1135,33 +1123,33 @@ class HPCEnv(gym.Env):
             if free_processors >= rjob.request_number_of_processors:
                 break
         
-        # import copy
-        # temp_running_jobs = self.running_jobs.copy()
-        # #not sure if this is really necessary. I just want to make a copy of the job for theoretical scheduling reasons
-        # temp_job = copy.deepcopy(job_for_scheduling)
-        # temp_request_nodes = int(math.ceil(float(temp_job.request_number_of_processors) / float(self.cluster.num_procs_per_node)))
-        # #moving code out here from self.allocate for ease of understanding. this gives us the amount of nodes we need
-        # temp_job.allocated_machines = [[x for x in range(temp_request_nodes)]]
-        # #when we are doing the calculation it only uses the length of allocated machines, not the actual internal info, so just make a dummy list of nodes length
-        # temp_job.scheduled_time = self.current_timestamp
-        # temp_running_jobs.append(temp_job)
-        # #set up the temp job then add to the queue
+        import copy
+        temp_running_jobs = self.running_jobs.copy()
+        #not sure if this is really necessary. I just want to make a copy of the job for theoretical scheduling reasons
+        temp_job = copy.deepcopy(job_for_scheduling)
+        temp_request_nodes = int(math.ceil(float(temp_job.request_number_of_processors) / float(self.cluster.num_procs_per_node)))
+        #moving code out here from self.allocate for ease of understanding. this gives us the amount of nodes we need
+        temp_job.allocated_machines = [[x for x in range(temp_request_nodes)]]
+        #when we are doing the calculation it only uses the length of allocated machines, not the actual internal info, so just make a dummy list of nodes length
+        temp_job.scheduled_time = self.current_timestamp
+        temp_running_jobs.append(temp_job)
+        #set up the temp job then add to the queue
 
-        # new_earliest_start_time = self.current_timestamp
-        # temp_running_jobs.sort(key=lambda running_job: (running_job.scheduled_time + running_job.request_time))
-        # free_processors = (self.cluster.free_node - temp_request_nodes) * self.cluster.num_procs_per_node
-        # for running_job in temp_running_jobs:
-        #     free_processors += len(running_job.allocated_machines) * self.cluster.num_procs_per_node
-        #     new_earliest_start_time = (running_job.scheduled_time + running_job.request_time)
-        #     if free_processors >= rjob.request_number_of_processors:
-        #         break
-        # expected_wait = (earliest_start_time - rjob.submit_time) if (earliest_start_time - rjob.submit_time) > 0 else 1
+        new_earliest_start_time = self.current_timestamp
+        temp_running_jobs.sort(key=lambda running_job: (running_job.scheduled_time + running_job.request_time))
+        free_processors = (self.cluster.free_node - temp_request_nodes) * self.cluster.num_procs_per_node
+        for running_job in temp_running_jobs:
+            free_processors += len(running_job.allocated_machines) * self.cluster.num_procs_per_node
+            new_earliest_start_time = (running_job.scheduled_time + running_job.request_time)
+            if free_processors >= rjob.request_number_of_processors:
+                break
+        expected_wait = (earliest_start_time - rjob.submit_time) if (earliest_start_time - rjob.submit_time) > 0 else 1
         #how many cases of expected wait are negative?
-        # delay = (new_earliest_start_time - earliest_start_time) / expected_wait
-        # if delay >= 3:
-        #     self.bf_skips += 1
-        #     #print(f"DEBUG! delay={delay} is too high for backfilling {temp_job}")
-        #     return self.skip_schedule()[0]
+        delay = (new_earliest_start_time - earliest_start_time) / expected_wait
+        if delay >= 3:
+            self.bf_skips += 1
+            #print(f"DEBUG! delay={delay} is too high for backfilling {temp_job}")
+            return self.skip_schedule()[0]
         
         while not self.cluster.can_allocated(rjob):
             _j = job_for_scheduling
@@ -1198,25 +1186,25 @@ class HPCEnv(gym.Env):
                 #bf_node = int(math.ceil(float(_j.request_number_of_processors)/float(self.cluster.num_procs_per_node)))
 
                 #print(f"expected wait = {expected_wait}, delay = {delay}, earliest_start={earliest_start_time}, new_earliest={new_earliest_start_time}, submit_time={rjob.submit_time}, rjob_node={rjob_node}, bf_node={bf_node}, free_node={self.cluster.free_node}")
-                self.delay += delay if delay >= 0 else 0
+                self.delay.append(delay) if delay >= 0 else 0
                 self.action_count += 1
 
-                #move to the next timestamp
-                assert self.running_jobs
-                self.running_jobs.sort(key=lambda running_job: (running_job.scheduled_time + running_job.run_time))
-                next_resource_release_time = (self.running_jobs[0].scheduled_time + self.running_jobs[0].run_time)
-                next_resource_release_machines = self.running_jobs[0].allocated_machines
-                    
-                if self.next_arriving_job_idx < self.last_job_in_batch \
-                and self.loads[self.next_arriving_job_idx].submit_time <= next_resource_release_time:
-                    self.current_timestamp = max(self.current_timestamp, self.loads[self.next_arriving_job_idx].submit_time)
-                    self.job_queue.append(self.loads[self.next_arriving_job_idx])
-                    self.next_arriving_job_idx += 1
-                else:
-                    self.current_timestamp = max(self.current_timestamp, next_resource_release_time)
-                    self.cluster.release(next_resource_release_machines)
-                    self.running_jobs.pop(0)  # remove the first running job
-                return False #backfilling isnt done, ask for more jobs
+                # move to the next timestamp
+            assert self.running_jobs
+            self.running_jobs.sort(key=lambda running_job: (running_job.scheduled_time + running_job.run_time))
+            next_resource_release_time = (self.running_jobs[0].scheduled_time + self.running_jobs[0].run_time)
+            next_resource_release_machines = self.running_jobs[0].allocated_machines
+                
+            if self.next_arriving_job_idx < self.last_job_in_batch \
+            and self.loads[self.next_arriving_job_idx].submit_time <= next_resource_release_time:
+                self.current_timestamp = max(self.current_timestamp, self.loads[self.next_arriving_job_idx].submit_time)
+                self.job_queue.append(self.loads[self.next_arriving_job_idx])
+                self.next_arriving_job_idx += 1
+            else:
+                self.current_timestamp = max(self.current_timestamp, next_resource_release_time)
+                self.cluster.release(next_resource_release_machines)
+                self.running_jobs.pop(0)  # remove the first running job
+            return False #backfilling isnt done, ask for more jobs
 
         #print(f'debug! Backfilling completed succesfully! Returning true')
         return True #backfilling is done, return to heuristic scheduling
@@ -1334,7 +1322,7 @@ class HPCEnv(gym.Env):
             _tmp = float(job_for_scheduling.scheduled_time - job_for_scheduling.submit_time + job_for_scheduling.run_time)
         elif self.job_score_type == 3:
             # utilization
-            _tmp = job_for_scheduling#-float(job_for_scheduling.run_time*job_for_scheduling.request_number_of_processors)
+            _tmp = -float(job_for_scheduling.run_time*job_for_scheduling.request_number_of_processors)
         elif self.job_score_type == 4:
             # sld
             _tmp = float(job_for_scheduling.scheduled_time - job_for_scheduling.submit_time + job_for_scheduling.run_time)\
