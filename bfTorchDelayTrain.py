@@ -1045,7 +1045,7 @@ class HPCEnv(gym.Env):
         self.pairs = []
         add_skip = False
         for i in range(0, MAX_QUEUE_SIZE):
-            if i < len(self.visible_jobs) and i < (MAX_QUEUE_SIZE ):
+            if i < len(self.visible_jobs) and i < (MAX_QUEUE_SIZE ) and self.cluster.can_allocated(self.visible_jobs[i]):
                 job = self.visible_jobs[i]
                 submit_time = job.submit_time
                 request_processors = job.request_number_of_processors
@@ -1108,11 +1108,24 @@ class HPCEnv(gym.Env):
             vector[i*JOB_FEATURES:(i+1)*JOB_FEATURES] = self.pairs[i][1:]
 
         return vector
+    
+    def canBackfill(self):
+        bf_jobs = []
+        for _j in self.visible_jobs:
+            free_processors = self.cluster.free_node * self.cluster.num_procs_per_node
+            if _j.request_number_of_processors <= free_processors:
+                bf_jobs.append(_j)
+        if len(bf_jobs) > 0:
+            return True
+        return False
 
     def moveforward_for_resources_backfill_modified(self, rjob, job_for_scheduling):
         #note that this function is only called when current job can not be scheduled.
         #got rid of assert here because it seems like it works fine without and control wise it checks below in the while not so it should be fine
         
+        if not self.canBackfill():
+            return self.skip_schedule()[0]
+
 
         earliest_start_time = self.current_timestamp
         # sort all running jobs by estimated finish time
@@ -1187,22 +1200,22 @@ class HPCEnv(gym.Env):
                 self.delay += delay if delay >= 0 else 0
                 self.action_count += 1
 
-            # move to the next timestamp
-            assert self.running_jobs
-            self.running_jobs.sort(key=lambda running_job: (running_job.scheduled_time + running_job.run_time))
-            next_resource_release_time = (self.running_jobs[0].scheduled_time + self.running_jobs[0].run_time)
-            next_resource_release_machines = self.running_jobs[0].allocated_machines
-                
-            if self.next_arriving_job_idx < self.last_job_in_batch \
-            and self.loads[self.next_arriving_job_idx].submit_time <= next_resource_release_time:
-                self.current_timestamp = max(self.current_timestamp, self.loads[self.next_arriving_job_idx].submit_time)
-                self.job_queue.append(self.loads[self.next_arriving_job_idx])
-                self.next_arriving_job_idx += 1
-            else:
-                self.current_timestamp = max(self.current_timestamp, next_resource_release_time)
-                self.cluster.release(next_resource_release_machines)
-                self.running_jobs.pop(0)  # remove the first running job
-            return False #backfilling isnt done, ask for more jobs
+                # move to the next timestamp
+                assert self.running_jobs
+                self.running_jobs.sort(key=lambda running_job: (running_job.scheduled_time + running_job.run_time))
+                next_resource_release_time = (self.running_jobs[0].scheduled_time + self.running_jobs[0].run_time)
+                next_resource_release_machines = self.running_jobs[0].allocated_machines
+                    
+                if self.next_arriving_job_idx < self.last_job_in_batch \
+                and self.loads[self.next_arriving_job_idx].submit_time <= next_resource_release_time:
+                    self.current_timestamp = max(self.current_timestamp, self.loads[self.next_arriving_job_idx].submit_time)
+                    self.job_queue.append(self.loads[self.next_arriving_job_idx])
+                    self.next_arriving_job_idx += 1
+                else:
+                    self.current_timestamp = max(self.current_timestamp, next_resource_release_time)
+                    self.cluster.release(next_resource_release_machines)
+                    self.running_jobs.pop(0)  # remove the first running job
+                return False #backfilling isnt done, ask for more jobs
         #print(f'debug! Backfilling completed succesfully! Returning true')
         return True #backfilling is done, return to heuristic scheduling
     
