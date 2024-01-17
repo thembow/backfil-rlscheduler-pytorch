@@ -759,7 +759,7 @@ class HPCEnv(gym.Env):
 
         while not self.cluster.can_allocated(job): 
             #best fit key: key=lambda _j: self.node_score(_j)
-            self.job_queue.sort(key=lambda job: self.fcfs_score(job))
+            self.job_queue.sort(key=lambda _j: self.fcfs_score(_j))
             #key=lambda _j: self.node_score(_j)
             job_queue_iter_copy = list(self.job_queue)
             job_queue_iter_copy.remove(job) #so we dont try and backfill the relative job
@@ -808,24 +808,9 @@ class HPCEnv(gym.Env):
             for i in scheduled_logs:
                 scheduled_logs[i] /= self.num_job_in_batch
         elif self.job_score_type == 3:
-            start = self.loads[self.start+JOB_SEQUENCE_SIZE//100].submit_time
-            end = self.loads[self.last_job_in_batch-1].scheduled_time
-            #start = 0.15*(self.current_timestamp-self.loads[self.start].submit_time)+self.loads[self.start].submit_time
-            #end = 0.85*(self.current_timestamp-self.loads[self.start].submit_time)+self.loads[self.start].submit_time
-            total_cpu_hour = (end - start)*self.loads.max_procs
-            s = 0
+            total_cpu_hour = (self.current_timestamp - self.loads[self.start].submit_time)*self.loads.max_procs
             for i in scheduled_logs:
-                j = scheduled_logs[i]
-                if j.scheduled_time >= start and j.scheduled_time+j.run_time<=end:
-                    s += -float(j.run_time*j.request_number_of_processors)
-                elif j.scheduled_time < start and j.scheduled_time+j.run_time>start:
-                    s += -float((j.scheduled_time+j.run_time-start)*j.request_number_of_processors)
-                elif j.scheduled_time+j.run_time>end and j.scheduled_time<end:
-                    s += -float((end-j.scheduled_time)*j.request_number_of_processors)
-            s /= total_cpu_hour
-            n = len(scheduled_logs)
-            for i in scheduled_logs:
-                scheduled_logs[i] = s/n
+                scheduled_logs[i] /= total_cpu_hour
         elif self.job_score_type == 4:
             for i in scheduled_logs:
                 scheduled_logs[i] /= self.num_job_in_batch
@@ -1319,7 +1304,7 @@ class HPCEnv(gym.Env):
             _tmp = float(job_for_scheduling.scheduled_time - job_for_scheduling.submit_time + job_for_scheduling.run_time)
         elif self.job_score_type == 3:
             # utilization
-            _tmp = job_for_scheduling#-float(job_for_scheduling.run_time*job_for_scheduling.request_number_of_processors)
+            _tmp = -float(job_for_scheduling.run_time*job_for_scheduling.request_number_of_processors)
         elif self.job_score_type == 4:
             # sld
             _tmp = float(job_for_scheduling.scheduled_time - job_for_scheduling.submit_time + job_for_scheduling.run_time)\
