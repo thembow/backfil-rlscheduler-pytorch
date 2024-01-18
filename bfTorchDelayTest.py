@@ -756,6 +756,8 @@ class HPCEnv(gym.Env):
             earliest_start_time = (running_job.scheduled_time + (running_job.request_time))
             if free_processors >= job.request_number_of_processors:
                 break
+        expected_wait = (earliest_start_time - job.submit_time) if (earliest_start_time - job.submit_time) > 0 else 1
+        earliest_start_time = earliest_start_time + (expected_wait * 0.025)
 
         while not self.cluster.can_allocated(job): 
             #best fit key: key=lambda _j: self.node_score(_j)
@@ -1188,23 +1190,26 @@ class HPCEnv(gym.Env):
                 #print(f"expected wait = {expected_wait}, delay = {delay}, earliest_start={earliest_start_time}, new_earliest={new_earliest_start_time}, submit_time={rjob.submit_time}, rjob_node={rjob_node}, bf_node={bf_node}, free_node={self.cluster.free_node}")
                 self.delay.append(delay) if delay >= 0 else 0
                 self.action_count += 1
+                
+                # # move to the next timestamp
+                # assert self.running_jobs
+                # self.running_jobs.sort(key=lambda running_job: (running_job.scheduled_time + running_job.run_time))
+                # next_resource_release_time = (self.running_jobs[0].scheduled_time + self.running_jobs[0].run_time)
+                # next_resource_release_machines = self.running_jobs[0].allocated_machines
+                    
+                # if self.next_arriving_job_idx < self.last_job_in_batch \
+                # and self.loads[self.next_arriving_job_idx].submit_time <= next_resource_release_time:
+                #     self.current_timestamp = max(self.current_timestamp, self.loads[self.next_arriving_job_idx].submit_time)
+                #     self.job_queue.append(self.loads[self.next_arriving_job_idx])
+                #     self.next_arriving_job_idx += 1
+                # else:
+                #     self.current_timestamp = max(self.current_timestamp, next_resource_release_time)
+                #     self.cluster.release(next_resource_release_machines)
+                #     self.running_jobs.pop(0)  # remove the first running job
+                return False
 
             # move to the next timestamp
-                assert self.running_jobs
-                self.running_jobs.sort(key=lambda running_job: (running_job.scheduled_time + running_job.run_time))
-                next_resource_release_time = (self.running_jobs[0].scheduled_time + self.running_jobs[0].run_time)
-                next_resource_release_machines = self.running_jobs[0].allocated_machines
-                    
-                if self.next_arriving_job_idx < self.last_job_in_batch \
-                and self.loads[self.next_arriving_job_idx].submit_time <= next_resource_release_time:
-                    self.current_timestamp = max(self.current_timestamp, self.loads[self.next_arriving_job_idx].submit_time)
-                    self.job_queue.append(self.loads[self.next_arriving_job_idx])
-                    self.next_arriving_job_idx += 1
-                else:
-                    self.current_timestamp = max(self.current_timestamp, next_resource_release_time)
-                    self.cluster.release(next_resource_release_machines)
-                    self.running_jobs.pop(0)  # remove the first running job
-                return False #backfilling isnt done, ask for more jobs
+            
         #print(f'debug! Backfilling completed succesfully! Returning true')
         return True #backfilling is done, return to heuristic scheduling
     
