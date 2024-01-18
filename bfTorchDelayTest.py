@@ -756,8 +756,8 @@ class HPCEnv(gym.Env):
             earliest_start_time = (running_job.scheduled_time + (running_job.request_time))
             if free_processors >= job.request_number_of_processors:
                 break
-        expected_wait = (earliest_start_time - job.submit_time) if (earliest_start_time - job.submit_time) > 0 else 1
-        earliest_start_time = earliest_start_time + (expected_wait * 0.025)
+        # expected_wait = (earliest_start_time - job.submit_time) if (earliest_start_time - job.submit_time) > 0 else 1
+        # earliest_start_time = earliest_start_time + (expected_wait * 0.025)
 
         while not self.cluster.can_allocated(job): 
             #best fit key: key=lambda _j: self.node_score(_j)
