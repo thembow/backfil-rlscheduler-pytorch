@@ -1107,6 +1107,9 @@ class HPCEnv(gym.Env):
     def moveforward_for_resources_backfill_modified(self, rjob, job_for_scheduling):
         #note that this function is only called when current job can not be scheduled.
         #got rid of assert here because it seems like it works fine without and control wise it checks below in the while not so it should be fine
+        if self.cluster.can_allocated(rjob):
+            return True
+        
         if not self.canBackfill():
             return self.skip_schedule()[0]
 
@@ -1142,11 +1145,14 @@ class HPCEnv(gym.Env):
                 break
         expected_wait = (earliest_start_time - rjob.submit_time) if (earliest_start_time - rjob.submit_time) > 0 else 1
         #how many cases of expected wait are negative?
+        
+        #print(f"debug! delay ratio = {delay_time}/{expected_wait}")
         delay = (new_earliest_start_time - earliest_start_time) / expected_wait
-        if delay >= 3:
+        if delay >= 0.03:
             self.bf_skips += 1
-            #print(f"DEBUG! delay={delay} is too high for backfilling {temp_job}")
+            #print(f"DEBUG! delay={delay} is too high for backfilling {temp_job} for rjob{rjob}")
             return self.skip_schedule()[0]
+        #print(f"debug! delay ratio = {delay_time}/{expected_wait}")
         
         while not self.cluster.can_allocated(rjob):
             _j = job_for_scheduling
