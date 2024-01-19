@@ -757,7 +757,7 @@ class HPCEnv(gym.Env):
             if free_processors >= job.request_number_of_processors:
                 break
         # expected_wait = (earliest_start_time - job.submit_time) if (earliest_start_time - job.submit_time) > 0 else 1
-        # earliest_start_time = earliest_start_time + (expected_wait * 0.025)
+        # earliest_start_time = earliest_start_time + (expected_wait * 0.029)
 
         while not self.cluster.can_allocated(job): 
             #best fit key: key=lambda _j: self.node_score(_j)
@@ -938,7 +938,9 @@ class HPCEnv(gym.Env):
         self.visible_jobs = []
         for i in range(0, MAX_QUEUE_SIZE):
             if i < len(self.job_queue):
-                self.visible_jobs.append(self.job_queue[i])
+                if self.cluster.can_allocated(self.job_queue[i]):
+                    #print("debug! backfillable job appended to visible jobs!")
+                    self.visible_jobs.append(self.job_queue[i])
             else:
                 break
         self.visible_jobs.sort(key=lambda j: self.fcfs_score(j))
@@ -947,70 +949,70 @@ class HPCEnv(gym.Env):
 
 
         #@ddai: optimize the observable jobs
-        self.visible_jobs = []
-        if len(self.job_queue) <= MAX_QUEUE_SIZE:
-            for i in range(0, len(self.job_queue)):
-                self.visible_jobs.append(self.job_queue[i])
-        else:
-            visible_f1 = []
-            f1_index = 0
-            self.job_queue.sort(key=lambda job: self.f1_score(job))
-            for i in range(0, MAX_QUEUE_SIZE):
-                visible_f1.append(self.job_queue[i])
+        # self.visible_jobs = []
+        # if len(self.job_queue) <= MAX_QUEUE_SIZE:
+        #     for i in range(0, len(self.job_queue)):
+        #         self.visible_jobs.append(self.job_queue[i])
+        # else:
+        #     visible_f1 = []
+        #     f1_index = 0
+        #     self.job_queue.sort(key=lambda job: self.f1_score(job))
+        #     for i in range(0, MAX_QUEUE_SIZE):
+        #         visible_f1.append(self.job_queue[i])
             
-            visible_f2 = []
-            f2_index = 0
-            self.job_queue.sort(key=lambda job: self.f2_score(job))
-            for i in range(0, MAX_QUEUE_SIZE):
-                visible_f2.append(self.job_queue[i])
+        #     visible_f2 = []
+        #     f2_index = 0
+        #     self.job_queue.sort(key=lambda job: self.f2_score(job))
+        #     for i in range(0, MAX_QUEUE_SIZE):
+        #         visible_f2.append(self.job_queue[i])
             
-            visible_sjf = []
-            sjf_index = 0
-            self.job_queue.sort(key=lambda job: self.sjf_score(job))
-            for i in range(0, MAX_QUEUE_SIZE):
-                visible_sjf.append(self.job_queue[i])
+        #     visible_sjf = []
+        #     sjf_index = 0
+        #     self.job_queue.sort(key=lambda job: self.sjf_score(job))
+        #     for i in range(0, MAX_QUEUE_SIZE):
+        #         visible_sjf.append(self.job_queue[i])
 
-            visible_small = []
-            small_index = 0
-            self.job_queue.sort(key=lambda job: self.smallest_score(job))
-            for i in range(0, MAX_QUEUE_SIZE):
-                visible_small.append(self.job_queue[i])
+        #     visible_small = []
+        #     small_index = 0
+        #     self.job_queue.sort(key=lambda job: self.smallest_score(job))
+        #     for i in range(0, MAX_QUEUE_SIZE):
+        #         visible_small.append(self.job_queue[i])
 
-            visible_random = []
-            random_index = 0
-            shuffled = list(self.job_queue)
-            random.shuffle(shuffled)
-            for i in range(0, MAX_QUEUE_SIZE):
-                visible_random.append(shuffled[i])
+        #     visible_random = []
+        #     random_index = 0
+        #     shuffled = list(self.job_queue)
+        #     random.shuffle(shuffled)
+        #     for i in range(0, MAX_QUEUE_SIZE):
+        #         visible_random.append(shuffled[i])
 
-            index = 0
+        #     index = 0
 
-            while index < MAX_QUEUE_SIZE:
-                f1_job = visible_f1[f1_index]
-                f1_index += 1
-                f2_job = visible_f2[f2_index]
-                f2_index += 1
-                sjf_job = visible_sjf[sjf_index]
-                sjf_index += 1
-                small_job = visible_small[small_index]
-                small_index += 1
-                random_job = visible_sjf[random_index]
-                random_index += 1
-                #if (not f1_job in self.visible_jobs) and index < MAX_QUEUE_SIZE:
-                #    self.visible_jobs.append(f1_job)
-                #    index += 1
-                #if (not f2_job in self.visible_jobs) and index < MAX_QUEUE_SIZE:
-                #    self.visible_jobs.append(f2_job)
-                #    index += 1
-                if (not sjf_job in self.visible_jobs) and index < MAX_QUEUE_SIZE:
-                    self.visible_jobs.append(sjf_job)
-                    index += 1
-                if (not small_job in self.visible_jobs) and index < MAX_QUEUE_SIZE:
-                    self.visible_jobs.append(small_job)
-                    index += 1
-                if (not random_job in self.visible_jobs) and index < MAX_QUEUE_SIZE:
-                    self.visible_jobs.append(random_job)
-                    index += 1
+        #     while index < MAX_QUEUE_SIZE:
+        #         f1_job = visible_f1[f1_index]
+        #         f1_index += 1
+        #         f2_job = visible_f2[f2_index]
+        #         f2_index += 1
+        #         sjf_job = visible_sjf[sjf_index]
+        #         sjf_index += 1
+        #         small_job = visible_small[small_index]
+        #         small_index += 1
+        #         random_job = visible_sjf[random_index]
+        #         random_index += 1
+        #         #if (not f1_job in self.visible_jobs) and index < MAX_QUEUE_SIZE:
+        #         #    self.visible_jobs.append(f1_job)
+        #         #    index += 1
+        #         #if (not f2_job in self.visible_jobs) and index < MAX_QUEUE_SIZE:
+        #         #    self.visible_jobs.append(f2_job)
+        #         #    index += 1
+        #         if (not sjf_job in self.visible_jobs) and index < MAX_QUEUE_SIZE:
+        #             self.visible_jobs.append(sjf_job)
+        #             index += 1
+        #         if (not small_job in self.visible_jobs) and index < MAX_QUEUE_SIZE:
+        #             self.visible_jobs.append(small_job)
+        #             index += 1
+        #         if (not random_job in self.visible_jobs) and index < MAX_QUEUE_SIZE:
+        #             self.visible_jobs.append(random_job)
+        #             index += 1
 
 
         '''
@@ -1032,7 +1034,7 @@ class HPCEnv(gym.Env):
         self.pairs = []
         add_skip = False
         for i in range(0, MAX_QUEUE_SIZE):
-            if i < len(self.visible_jobs) and i < (MAX_QUEUE_SIZE) and self.cluster.can_allocated(self.visible_jobs[i]) :
+            if i < len(self.visible_jobs) and i < (MAX_QUEUE_SIZE):
                 job = self.visible_jobs[i]
                 submit_time = job.submit_time
                 request_processors = job.request_number_of_processors
@@ -1097,12 +1099,12 @@ class HPCEnv(gym.Env):
         return vector
     
     def canBackfill(self):
-        bf_jobs = []
-        for _j in self.visible_jobs:
-            free_processors = self.cluster.free_node * self.cluster.num_procs_per_node
-            if _j.request_number_of_processors <= free_processors:
-                bf_jobs.append(_j)
-        if len(bf_jobs) > 0:
+        # bf_jobs = []
+        # for _j in self.job_queue:
+        #     free_processors = self.cluster.free_node * self.cluster.num_procs_per_node
+        #     if _j.request_number_of_processors <= free_processors:
+        #         bf_jobs.append(_j)
+        if len(self.visible_jobs) > 0:
             return True
         return False
 
@@ -1110,10 +1112,17 @@ class HPCEnv(gym.Env):
         #note that this function is only called when current job can not be scheduled.
         #got rid of assert here because it seems like it works fine without and control wise it checks below in the while not so it should be fine
         if self.cluster.can_allocated(rjob):
+            #print(f"debug! skipping due to rjob being backfillable")
             return True
         
+        
         if not self.canBackfill():
+            #print(f"debug! skipping due to no backfillable jobs!")
             return self.skip_schedule()[0]
+        
+        # if not job_for_scheduling:
+        #     print(f"debug! cannot backfill {job_for_scheduling}\ncurrent queue=")
+        #     print(*self.visible_jobs, sep=',')
 
         earliest_start_time = self.current_timestamp
         # sort all running jobs by estimated finish time
@@ -1161,6 +1170,8 @@ class HPCEnv(gym.Env):
             if self.cluster.can_allocated(_j):
                 # we should be OK to schedule the job now
                 assert _j.scheduled_time == -1  # this job should never be scheduled before.
+                #print(f"debug! backfilled {_j} successfully!")
+
                 self.job_queue.sort(key=lambda j: self.sjf_score(j))
                 sjf_id = self.job_queue[0].job_id
                 if sjf_id == _j.job_id:
@@ -1494,6 +1505,9 @@ class HPCEnv(gym.Env):
         else:
             self.post_process_score(self.scheduled_rl)
             rl_total = sum(self.scheduled_rl.values())
+            if self.action_count == 0:
+                self.action_count += 1
+                print("debug! 0 backfills this sequence!")
             print(f"{self.bf_skips / self.action_count}% backfill skips or {self.bf_skips} skips and {self.action_count} backfills")
             print(f"{self.sjf_backfills / self.action_count}% sjf backfills or {self.sjf_backfills} sjf backfills and {self.action_count} backfills")
             #print(f"debug! delay = {sum(self.delay)}, action count={self.action_count}, delay score={sum(self.delay)/self.action_count}")
