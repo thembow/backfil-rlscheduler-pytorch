@@ -1368,9 +1368,9 @@ class HPCEnv(gym.Env):
             else:
                 return False, 0
 
-        if next_time_after_skip < min(self.loads[self.next_arriving_job_idx].submit_time, next_resource_release_time):
-            self.current_timestamp = next_time_after_skip
-            return False, 0
+        # if next_time_after_skip < min(self.loads[self.next_arriving_job_idx].submit_time, next_resource_release_time):
+        #     self.current_timestamp = next_time_after_skip
+        #     return False, 0
         
         if self.next_arriving_job_idx < self.last_job_in_batch and self.loads[self.next_arriving_job_idx].submit_time <= next_resource_release_time:
             self.current_timestamp = max(self.current_timestamp, self.loads[self.next_arriving_job_idx].submit_time)
