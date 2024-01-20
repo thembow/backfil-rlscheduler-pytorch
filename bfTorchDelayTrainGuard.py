@@ -1161,7 +1161,7 @@ class HPCEnv(gym.Env):
         #how many cases of expected wait are negative?
         delay = (new_earliest_start_time - earliest_start_time) / expected_wait
         if delay >= 0.03:
-            self.bf_skips += 1
+            #self.bf_skips += 1
             #print(f"DEBUG! delay={delay} is too high for backfilling {temp_job}")
             return self.skip_schedule()[0]
         
